@@ -1,0 +1,42 @@
+info:
+  name: Create New Product
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/products
+  body:
+    type: json
+    data: |-
+      {
+        "productName": "Apple iPhone 13",
+        "description": "Apple iPhone 13 128GB Midnight - Brand New",
+        "price": 215000,
+        "brand": "Apple",
+        "model": "iPhone 13",
+        "color": "Midnight",
+        "capacity": "128GB",
+        "condition": "Brand New",
+        "warrenty": "1 Year Apple Warranty",
+        "IMEI": "356789012345678",
+        "barcode": "1234567890123",
+        "serialNumber": "SN-IP13-001",
+
+        "sku": "IPH13-128-MID",
+        "cost_price": 195000,
+        "selling_price": 215000,
+        "profit_margin": 10,
+        "supplier": "FutureWorld Sri Lanka",
+        "minimum_stock_level": 5,
+        "storage_location": "Rack A3",
+        "date_added": "2026-02-27",
+        "status": "active"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
