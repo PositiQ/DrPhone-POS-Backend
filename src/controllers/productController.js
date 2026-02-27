@@ -121,7 +121,13 @@ exports.getAllProducts = async (req, res) => {
     });
     res
       .status(200)
-      .json({ success: true, data: products, isAll: products.length < limit });
+      .json({ 
+        success: true, 
+        data: products, 
+        isAll: products.length < limit, 
+        inStock: products.filter(p => p.Product_Stock && p.Product_Stock.status === 'in_stock').length,
+        soldOut: products.filter(p => p.Product_Stock && p.Product_Stock.status === 'out_of_stock').length,
+    });
   } catch (error) {
     res
       .status(500)
