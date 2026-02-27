@@ -17,6 +17,11 @@ http://localhost:3000/api/products
   - [Stock Issues Model](#stock-issues-model)
 - [Endpoints](#endpoints)
   - [Create Product](#create-product)
+  - [Get All Products](#get-all-products)
+  - [Get Product by ID](#get-product-by-id)
+  - [Search Products](#search-products)
+  - [Update Product](#update-product)
+  - [Delete Product](#delete-product)
 - [Error Handling](#error-handling)
 - [Examples](#examples)
 
@@ -229,6 +234,445 @@ Creates a new product along with its stock information in a single transaction.
 
 ---
 
+### Get All Products
+
+Retrieves a list of all products with their stock information.
+
+**Endpoint:** `GET /api/products`
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | Integer | No | 100 | Maximum number of products to return |
+
+**Description:** Fetches all products from the database including their associated stock records. Returns a paginated list with a flag indicating if all products were returned.
+
+#### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "PROD-00001",
+      "productName": "iPhone 15 Pro Max",
+      "description": "Latest flagship iPhone",
+      "price": "1199.99",
+      "brand": "Apple",
+      "model": "A2849",
+      "color": "Natural Titanium",
+      "capacity": "256GB",
+      "condition": "New",
+      "warrenty": "1 Year Apple Warranty",
+      "IMEI": "359876543210987",
+      "barcode": "EAN13-00001",
+      "serialNumber": "ABCD-1234-EFGH",
+      "createdAt": "2026-02-27T10:30:00.000Z",
+      "updatedAt": "2026-02-27T10:30:00.000Z",
+      "Product_Stock": {
+        "id": 1,
+        "product_id": "PROD-00001",
+        "sku": "IPH15PM-256-NTT",
+        "cost_price": "999.00",
+        "selling_price": "1199.99",
+        "profit_margin": "20.08",
+        "supplier": "Apple Inc.",
+        "minimum_stock_level": 5,
+        "storage_location": "Warehouse A - Shelf 12",
+        "date_added": "2026-02-27T00:00:00.000Z",
+        "status": "in_stock",
+        "createdAt": "2026-02-27T10:30:00.000Z",
+        "updatedAt": "2026-02-27T10:30:00.000Z"
+      }
+    }
+  ],
+  "isAll": true
+}
+```
+
+**Response Fields:**
+- `success` - Boolean indicating if the request was successful
+- `data` - Array of product objects with nested Product_Stock
+- `isAll` - Boolean flag (true if returned count < limit, meaning all products were fetched)
+
+#### Error Response
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "success": false,
+  "message": "Error fetching products",
+  "error": "Detailed error message"
+}
+```
+
+#### Example Request
+
+```bash
+GET http://localhost:3000/api/products?limit=50
+```
+
+---
+
+### Get Product by ID
+
+Retrieves a single product by its unique ID along with stock information.
+
+**Endpoint:** `GET /api/products/:id`
+
+**URL Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | String | Yes | Product ID (format: PROD-XXXXX) |
+
+**Description:** Fetches a specific product using its unique identifier, including associated stock record.
+
+#### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "PROD-00001",
+    "productName": "iPhone 15 Pro Max",
+    "description": "Latest flagship iPhone",
+    "price": "1199.99",
+    "brand": "Apple",
+    "model": "A2849",
+    "color": "Natural Titanium",
+    "capacity": "256GB",
+    "condition": "New",
+    "warrenty": "1 Year Apple Warranty",
+    "IMEI": "359876543210987",
+    "barcode": "EAN13-00001",
+    "serialNumber": "ABCD-1234-EFGH",
+    "createdAt": "2026-02-27T10:30:00.000Z",
+    "updatedAt": "2026-02-27T10:30:00.000Z",
+    "Product_Stock": {
+      "id": 1,
+      "product_id": "PROD-00001",
+      "sku": "IPH15PM-256-NTT",
+      "cost_price": "999.00",
+      "selling_price": "1199.99",
+      "profit_margin": "20.08",
+      "supplier": "Apple Inc.",
+      "minimum_stock_level": 5,
+      "storage_location": "Warehouse A - Shelf 12",
+      "date_added": "2026-02-27T00:00:00.000Z",
+      "status": "in_stock",
+      "createdAt": "2026-02-27T10:30:00.000Z",
+      "updatedAt": "2026-02-27T10:30:00.000Z"
+    }
+  }
+}
+```
+
+#### Error Responses
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "success": false,
+  "message": "Product not found"
+}
+```
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "success": false,
+  "message": "Error fetching product",
+  "error": "Detailed error message"
+}
+```
+
+#### Example Request
+
+```bash
+GET http://localhost:3000/api/products/PROD-00001
+```
+
+---
+
+### Search Products
+
+Search for products by name, IMEI, barcode, or serial number.
+
+**Endpoint:** `GET /api/products/search`
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | String | Yes | Search term to match against product fields |
+
+**Description:** Performs a partial match search across multiple product fields (productName, IMEI, barcode, serialNumber) and returns all matching products with their stock information.
+
+**Search Fields:**
+- Product Name (partial match, case-insensitive)
+- IMEI (partial match)
+- Barcode (partial match)
+- Serial Number (partial match)
+
+#### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "PROD-00001",
+      "productName": "iPhone 15 Pro Max",
+      "description": "Latest flagship iPhone",
+      "price": "1199.99",
+      "brand": "Apple",
+      "model": "A2849",
+      "color": "Natural Titanium",
+      "capacity": "256GB",
+      "condition": "New",
+      "warrenty": "1 Year Apple Warranty",
+      "IMEI": "359876543210987",
+      "barcode": "EAN13-00001",
+      "serialNumber": "ABCD-1234-EFGH",
+      "createdAt": "2026-02-27T10:30:00.000Z",
+      "updatedAt": "2026-02-27T10:30:00.000Z",
+      "Product_Stock": {
+        "id": 1,
+        "product_id": "PROD-00001",
+        "sku": "IPH15PM-256-NTT",
+        "cost_price": "999.00",
+        "selling_price": "1199.99",
+        "profit_margin": "20.08",
+        "supplier": "Apple Inc.",
+        "minimum_stock_level": 5,
+        "storage_location": "Warehouse A - Shelf 12",
+        "date_added": "2026-02-27T00:00:00.000Z",
+        "status": "in_stock",
+        "createdAt": "2026-02-27T10:30:00.000Z",
+        "updatedAt": "2026-02-27T10:30:00.000Z"
+      }
+    }
+  ]
+}
+```
+
+**Response Fields:**
+- `success` - Boolean indicating if the request was successful
+- `data` - Array of matching product objects with nested Product_Stock (empty array if no matches)
+
+#### Error Response
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "success": false,
+  "message": "Error searching products",
+  "error": "Detailed error message"
+}
+```
+
+#### Example Requests
+
+**Search by product name:**
+```bash
+GET http://localhost:3000/api/products/search?query=iPhone
+```
+
+**Search by IMEI:**
+```bash
+GET http://localhost:3000/api/products/search?query=359876543210987
+```
+
+**Search by barcode:**
+```bash
+GET http://localhost:3000/api/products/search?query=EAN13-00001
+```
+
+**Search by serial number:**
+```bash
+GET http://localhost:3000/api/products/search?query=ABCD-1234
+```
+
+---
+
+### Update Product
+
+Updates an existing product's information.
+
+**Endpoint:** `PUT /api/products/:id`
+
+**Content-Type:** `application/json`
+
+**URL Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | String | Yes | Product ID (format: PROD-XXXXX) |
+
+**Description:** Updates the specified product fields. Only include fields you want to update in the request body. Note: This endpoint updates only the Product table, not Product_Stock.
+
+#### Request Body
+
+```json
+{
+  "productName": "string (optional)",
+  "description": "string (optional)",
+  "price": "number (optional)",
+  "brand": "string (optional)",
+  "model": "string (optional)",
+  "color": "string (optional)",
+  "capacity": "string (optional)",
+  "condition": "string (optional)",
+  "warrenty": "string (optional)",
+  "IMEI": "string (optional, must be unique)",
+  "barcode": "string (optional, must be unique)",
+  "serialNumber": "string (optional, must be unique)"
+}
+```
+
+**Note:** You can update any combination of fields. Only the fields provided in the request will be updated.
+
+#### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Product updated successfully",
+  "data": {
+    "id": "PROD-00001",
+    "productName": "iPhone 15 Pro Max - Updated",
+    "description": "Latest flagship iPhone with new description",
+    "price": "1099.99",
+    "brand": "Apple",
+    "model": "A2849",
+    "color": "Natural Titanium",
+    "capacity": "256GB",
+    "condition": "New",
+    "warrenty": "1 Year Apple Warranty",
+    "IMEI": "359876543210987",
+    "barcode": "EAN13-00001",
+    "serialNumber": "ABCD-1234-EFGH",
+    "createdAt": "2026-02-27T10:30:00.000Z",
+    "updatedAt": "2026-02-27T11:45:00.000Z"
+  }
+}
+```
+
+#### Error Responses
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "success": false,
+  "message": "Product not found"
+}
+```
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "success": false,
+  "message": "Error updating product",
+  "error": "Detailed error message"
+}
+```
+
+**Common Error Scenarios:**
+- Product with specified ID not found
+- Duplicate unique field (IMEI, barcode, serialNumber)
+- Invalid data type for field
+
+#### Example Request
+
+```bash
+PUT http://localhost:3000/api/products/PROD-00001
+Content-Type: application/json
+
+{
+  "price": 1099.99,
+  "description": "Latest flagship iPhone - Price reduced!"
+}
+```
+
+---
+
+### Delete Product
+
+Deletes a product and its associated stock record.
+
+**Endpoint:** `DELETE /api/products/:id`
+
+**URL Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | String | Yes | Product ID (format: PROD-XXXXX) |
+
+**Description:** Permanently deletes the specified product. Due to CASCADE delete behavior, the associated Product_Stock record is automatically deleted as well.
+
+**⚠️ Warning:** This operation is permanent and cannot be undone.
+
+#### Success Response
+
+**Status Code:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Product deleted successfully"
+}
+```
+
+#### Error Responses
+
+**Status Code:** `404 Not Found`
+
+```json
+{
+  "success": false,
+  "message": "Product not found"
+}
+```
+
+**Status Code:** `500 Internal Server Error`
+
+```json
+{
+  "success": false,
+  "message": "Error deleting product",
+  "error": "Detailed error message"
+}
+```
+
+#### Example Request
+
+```bash
+DELETE http://localhost:3000/api/products/PROD-00001
+```
+
+**Cascade Effect:**
+- Deletes the Product record
+- Automatically deletes associated Product_Stock record
+- Any Stock_Issues records referencing this product will also be cascade deleted
+
+---
+
 ## Error Handling
 
 The API uses database transactions to ensure data consistency. If any part of the product creation fails (either Product or Product_Stock), the entire transaction is rolled back, ensuring no partial data is saved.
@@ -247,8 +691,10 @@ The API uses database transactions to ensure data consistency. If any part of th
 
 | Code | Description |
 |------|-------------|
+| `200` | OK - Request successful |
 | `201` | Created - Resource successfully created |
 | `400` | Bad Request - Invalid input data |
+| `404` | Not Found - Resource not found |
 | `409` | Conflict - Duplicate unique field (IMEI, SKU, etc.) |
 | `500` | Internal Server Error - Server-side error |
 
@@ -468,18 +914,31 @@ Product IDs are automatically generated using a custom ID generator:
    - Product: `productName`, `price`, `brand`
    - Stock: `sku`, `cost_price`, `selling_price`
 
+---API Quick Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/products` | Create new product with stock |
+| `GET` | `/api/products` | Get all products (with limit) |
+| `GET` | `/api/products/search?query={term}` | Search products |
+| `GET` | `/api/products/:id` | Get product by ID |
+| `PUT` | `/api/products/:id` | Update product |
+| `DELETE` | `/api/products/:id` | Delete product |
+
 ---
 
 ## Future Enhancements
 
 Planned endpoints for future implementation:
-- `GET /api/products` - List all products
-- `GET /api/products/:id` - Get product by ID
-- `PUT /api/products/:id` - Update product
-- `DELETE /api/products/:id` - Delete product
 - `GET /api/products/stocks` - List all stock records
 - `PUT /api/products/stocks/:id` - Update stock status
+- `PATCH /api/products/:id/stock` - Update stock information for a product
 - `GET /api/products/low-stock` - Get products below minimum stock level
+- `POST /api/products/stock-issues` - Create stock issue record
+- `GET /api/products/stock-issues` - List stock issues
+- `GET /api/products/stats` - Get product statistics (total count, total value, etc.)
+- `POST /api/products/bulk` - Bulk create products
+- `PUT /api/products/bulk` - Bulk update productminimum stock level
 - `POST /api/products/stock-issues` - Create stock issue record
 - `GET /api/products/stock-issues` - List stock issues
 
