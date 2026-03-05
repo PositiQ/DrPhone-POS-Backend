@@ -7,6 +7,7 @@ A Node.js Express API with Sequelize ORM and SQLite database for a Point of Sale
 Comprehensive API documentation is available in the `/Documentation` folder:
 
 - **[Product API Documentation](./Documentation/Product-API.md)** - Complete guide for Product and Stock Management APIs
+- **[Customer API Documentation](./Documentation/customer-API.md)** - Complete guide for Customer and Sales Management APIs
 
 ## 📋 Table of Contents
 
@@ -30,7 +31,8 @@ app/
 │   ├── config/
 │   │   └── db.config.js           # Database configuration
 │   ├── controllers/
-│   │   └── productController.js   # Product & Stock CRUD operations
+│   │   ├── productController.js   # Product & Stock CRUD operations
+│   │   └── customerController.js  # Customer & Sales CRUD operations
 │   ├── middleware/
 │   │   └── errorHandler.js        # Global error handling
 │   ├── models/
@@ -38,13 +40,17 @@ app/
 │   │   ├── Product.js             # Product model
 │   │   ├── productStock.js        # Product_Stock model
 │   │   ├── stockIssues.js         # Stock_Issues model
+│   │   ├── customer.js            # Customer model
+│   │   ├── customerSales.js       # Customer_Sales model
 │   │   └── id.js                  # ID generation utilities
 │   ├── routes/
-│   │   └── products.js            # Product API routes
+│   │   ├── products.js            # Product API routes
+│   │   └── customers.js           # Customer API routes
 │   └── helpers/
-│       └── idGen.js               # Product ID generator
+│       └── idGen.js               # Universal ID generator
 ├── Documentation/                  # 📚 API Documentation
-│   └── Product-API.md             # Product & Stock API docs
+│   ├── Product-API.md             # Product & Stock API docs
+│   └── customer-API.md            # Customer & Sales API docs
 ├── data/                           # SQLite database folder
 │   └── database.db                # SQLite database file
 ├── app.js                          # Express app setup
@@ -94,33 +100,36 @@ Verify the API is running:
 ```bash
 GET http://localhost:3000/api/health
 ```
- & Stock Management
+
+## API Endpoints
+
+### Product & Stock Management
 - `POST /api/products` - Create new product with stock information
+- `GET /api/products` - Get all products
+- `GET /api/products/:id` - Get product by ID
+- `PUT /api/products/:id` - Update product
+- `DELETE /api/products/:id` - Delete product
+- `GET /api/products/search` - Search products
 
 **📖 For detailed Product API documentation, see [Product-API.md](./Documentation/Product-API.md)**
 
-*Note: Additional endpoints (GET, PUT, DELETE) are planned for future implementation.*
-- `POST /api/orders` - Create new order
-- `PUT /api/orders/:id` - Update order
-- `DELETE /api/orders/:id` - Delete order
+### Customer & Sales Management
+- `POST /api/customers` - Create new customer
+- `GET /api/customers` - Get all customers with filters and statistics
+- `GET /api/customers/:id` - Get customer by ID
+- `PUT /api/customers/:id` - Update customer
+- `DELETE /api/customers/:id` - Delete customer
+- `GET /api/customers/search` - Search customers
+- `GET /api/customers/dues` - Get customers with outstanding dues
+- `GET /api/customers/:id/sales` - Get customer sales history
+- `POST /api/customers/sales` - Create customer sale record
+- `PUT /api/customers/sales/:id` - Update customer sale
+
+**📖 For detailed Customer API documentation, see [customer-API.md](./Documentation/customer-API.md)**
 
 ## Database Models
 
-### Product
-- `id` (Integer, Primary Key)
-- `name` (String, Required, Unique)
-- `description` (Text)
-- `price` (Decimal, Required)
-- `quantity` (Integer)
-- `sku` (String, Unique)
-- `category` (String)
-- `isActive` (Boolean, Default: true)
-- `createdAt` (Timestamp)
-- `updatedAt` (Timestamp)
-
-### Customer
-- `id` (Integer, Primary Key)
-The system uses three main models for product and inventory management:
+The system uses comprehensive models for product, inventory, and customer management:
 
 ### Product
 Primary product information including specifications and unique identifiers.
@@ -155,7 +164,36 @@ Tracks product issuance and sales transactions.
 - `product_id` (Foreign Key to Product)
 - `issued_to` (String, Required)
 - `issued_date` (Date)
-- `status` (Enum: pe with Stock
+- `status` (Enum: pending, completed, cancelled)
+
+**Full Schema:** See [Product-API.md](./Documentation/Product-API.md#stock-issues-model)
+
+### Customer
+Stores comprehensive customer information and business terms.
+
+**Key Fields:**
+- `customer_id` (String, Primary Key) - Auto-generated (CUST-XXXXX format)
+- `name` (String, Required)
+- `phone_number` (String, Required, Unique)
+- `email` (String, Unique)
+- `type` (Enum: regular, wholesale)
+- `credit_limit` (Decimal)
+- `status` (Enum: active, inactive)
+
+**Full Schema:** See [customer-API.md](./Documentation/customer-API.md#customer-model)
+
+### Customer_Sales
+Tracks all sales transactions and payment status.
+
+**Key Fields:**
+- `id` (Integer, Primary Key)
+- `customer_id` (Foreign Key to Customer)
+- `total_sales_amount` (Decimal, Required)
+- `paid_amount` (Decimal)
+- `payment_status` (Enum: paid, pending, overdue)
+- `is_due_available` (Boolean)
+
+**Full Schema:** See [customer-API.md](./Documentation/customer-API.md#customer-sales-model)
 
 ```json
 POST /api/products
@@ -185,9 +223,33 @@ Content-Type: application/json
 }
 ```
 
-**📖 More examples and detailed request/response formats:** [Product-API.md](./Documentation/Product-API.md#examples)*Express.js** - Web framework
-- **Sequelize** - ORM for database management
-- **SQLite3** - Lv4.18.2 - Web framework
+**📖 More examples:** [Product-API.md](./Documentation/Product-API.md#examples)
+
+### Create Customer
+
+```json
+POST /api/customers
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "phone_number": "0771234567",
+  "type": "regular",
+  "address": "123 Main Street",
+  "city": "Colombo",
+  "credit_limit": 50000.00,
+  "credit_days": 30,
+  "discount_rate": 5.00,
+  "status": "active"
+}
+```
+
+**📖 More examples:** [customer-API.md](./Documentation/customer-API.md#examples)
+
+## Technologies Used
+
+- **Express.js** v4.18.2 - Web framework
 - **Sequelize** v6.35.1 - ORM for database management
 - **SQLite3** v5.1.6 - Lightweight SQL database
 - **dotenv** v16.3.1 - Environment variable management
@@ -198,11 +260,14 @@ Content-Type: application/json
 ## Key Features
 
 ✅ **Transaction Safety** - Atomic operations ensure data consistency  
-✅ **Auto ID Generation** - Products get unique IDs (PROD-XXXXX format)  
+✅ **Auto ID Generation** - Products (PROD-XXXXX) and Customers (CUST-XXXXX) get unique IDs  
 ✅ **Stock Management** - Integrated inventory tracking with products  
+✅ **Customer Management** - Comprehensive CRM with credit and sales tracking  
 ✅ **Cascade Operations** - Foreign key relationships with CASCADE delete  
-✅ **Status Tracking** - Product lifecycle management (active → in_stock → sold)  
-✅ **Unique Constraints** - IMEI, SKU, barcode, and serial number validation
+✅ **Status Tracking** - Product and customer lifecycle management  
+✅ **Unique Constraints** - IMEI, SKU, barcode, serial number, and customer contact validation  
+✅ **Advanced Search** - Multi-field search for products and customers  
+✅ **Due Management** - Track and monitor outstanding customer payments
 
 ## Contributing
 
@@ -214,7 +279,7 @@ When adding new features or endpoints, please:
 
 ## Documentation Standards
 
-All API endpoints should be documented following the format in [Product-API.md](./Documentation/Product-API.md):
+All API endpoints should be documented following the format in [Product-API.md](./Documentation/Product-API.md) and [customer-API.md](./Documentation/customer-API.md):
 - Complete model schemas
 - Request/response examples
 - Error handling details
@@ -227,5 +292,5 @@ ISC
 
 ---
 
-**Last Updated:** February 27, 2026  
+**Last Updated:** March 5, 2026  
 **Version:** 1.0.0

@@ -1,6 +1,6 @@
 const { Product, Product_Stock } = require("../models");
 const generateId = require("../helpers/idGen");
-const { Op } = require("sequelize");
+const { Op, ValidationError, UniqueConstraintError } = require("sequelize");
 
 // Create a new product
 exports.createProduct = async (req, res) => {
@@ -31,6 +31,13 @@ exports.createProduct = async (req, res) => {
       } = req.body;
 
       const productID = await generateId("PROD");
+
+      // Check required fields
+      if (!productName || !price || !brand) {
+        throw new Error(
+          "Missing required fields: productName, price, and brand are required.",
+        );
+      }
 
       console.log("Generated Product ID:", productID);
 
@@ -78,10 +85,24 @@ exports.createProduct = async (req, res) => {
       ...result,
     });
   } catch (error) {
+    console.error(error); // always log full error
+
+    let errorMessage = error.message;
+
+    // Sequelize validation errors
+    if (error instanceof ValidationError) {
+      errorMessage = error.errors.map((e) => e.message).join(", ");
+    }
+
+    // Unique constraint errors (duplicate values)
+    if (error instanceof UniqueConstraintError) {
+      errorMessage = error.errors.map((e) => e.message).join(", ");
+    }
+
     res.status(500).json({
       success: false,
       message: "Error creating product",
-      error: error.message,
+      error: errorMessage,
     });
   }
 };
@@ -101,13 +122,11 @@ exports.getProductById = async (req, res) => {
 
     res.status(200).json({ success: true, data: product });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching product",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching product",
+      error: error.message,
+    });
   }
 };
 
@@ -119,23 +138,23 @@ exports.getAllProducts = async (req, res) => {
       include: Product_Stock,
       limit: limit,
     });
-    res
-      .status(200)
-      .json({ 
-        success: true, 
-        data: products, 
-        isAll: products.length < limit, 
-        inStock: products.filter(p => p.Product_Stock && p.Product_Stock.status === 'in_stock').length,
-        soldOut: products.filter(p => p.Product_Stock && p.Product_Stock.status === 'out_of_stock').length,
+    res.status(200).json({
+      success: true,
+      data: products,
+      isAll: products.length < limit,
+      inStock: products.filter(
+        (p) => p.Product_Stock && p.Product_Stock.status === "in_stock",
+      ).length,
+      soldOut: products.filter(
+        (p) => p.Product_Stock && p.Product_Stock.status === "out_of_stock",
+      ).length,
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error fetching products",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching products",
+      error: error.message,
+    });
   }
 };
 
@@ -157,13 +176,11 @@ exports.searchProducts = async (req, res) => {
 
     res.status(200).json({ success: true, data: products });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error searching products",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error searching products",
+      error: error.message,
+    });
   }
 };
 
@@ -180,21 +197,17 @@ exports.updateProduct = async (req, res) => {
 
     await product.update(req.body);
 
-    res
-      .status(200)
-      .json({
-        success: true,
-        message: "Product updated successfully",
-        data: product,
-      });
+    res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      data: product,
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error updating product",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error updating product",
+      error: error.message,
+    });
   }
 };
 
@@ -214,12 +227,10 @@ exports.deleteProduct = async (req, res) => {
       .status(200)
       .json({ success: true, message: "Product deleted successfully" });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error deleting product",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting product",
+      error: error.message,
+    });
   }
 };
