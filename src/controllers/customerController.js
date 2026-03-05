@@ -159,6 +159,17 @@ exports.getAllCustomers = async (req, res) => {
       wholesale: customers.filter((c) => c.type === "wholesale").length,
     };
 
+    const totalOutstandingDues = customers.reduce((sum, customer) => {
+      const customerDues = customer.customer_sales.reduce((dueSum, sale) => {
+        if (sale.is_due_available && ["pending", "overdue"].includes(sale.payment_status)) {
+          return dueSum + parseFloat(sale.total_sales_amount || 0) - parseFloat(sale.paid_amount || 0);
+        }
+        return dueSum;
+      }, 0);
+      return sum + customerDues;
+    }, 0);
+    stats.totalOutstandingDues = totalOutstandingDues;
+
     await t.commit();
 
     res.status(200).json({
