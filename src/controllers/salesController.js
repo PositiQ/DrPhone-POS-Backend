@@ -2,6 +2,24 @@ const { sales, itemSales, Product, customer, Product_Stock } = require("../model
 const generateId = require("../helpers/idGen");
 const { Op, ValidationError, UniqueConstraintError } = require("sequelize");
 
+function buildSalesDateFilter(startDate, endDate) {
+  const salesDateFilter = {};
+
+  if (startDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    salesDateFilter[Op.gte] = start;
+  }
+
+  if (endDate) {
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    salesDateFilter[Op.lte] = end;
+  }
+
+  return salesDateFilter;
+}
+
 // Create a new sale
 exports.createSale = async (req, res) => {
   try {
@@ -175,9 +193,7 @@ exports.getAllSales = async (req, res) => {
     if (status) whereClause.status = status;
     if (payment_method) whereClause.payment_method = payment_method;
     if (start_date || end_date) {
-      whereClause.sales_date = {};
-      if (start_date) whereClause.sales_date[Op.gte] = new Date(start_date);
-      if (end_date) whereClause.sales_date[Op.lte] = new Date(end_date);
+      whereClause.sales_date = buildSalesDateFilter(start_date, end_date);
     }
 
     const { count, rows } = await sales.findAndCountAll({
@@ -309,9 +325,7 @@ exports.getSalesSummary = async (req, res) => {
 
     const whereClause = {};
     if (start_date || end_date) {
-      whereClause.sales_date = {};
-      if (start_date) whereClause.sales_date[Op.gte] = new Date(start_date);
-      if (end_date) whereClause.sales_date[Op.lte] = new Date(end_date);
+      whereClause.sales_date = buildSalesDateFilter(start_date, end_date);
     }
 
     const totalSales = await sales.count({ where: whereClause });
