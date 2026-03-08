@@ -45,6 +45,11 @@ const Product_Stock = sequelize.define(
         type: DataTypes.INTEGER,
         allowNull: true,
     },
+    quantity_in_stock: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 0,
+    },
     storage_location: {
         type: DataTypes.STRING,
         allowNull: true,

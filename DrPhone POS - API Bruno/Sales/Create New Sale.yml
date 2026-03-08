@@ -1,0 +1,32 @@
+info:
+  name: Create New Sale
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/sales
+  body:
+    type: json
+    data: |-
+      {
+        "customer_id": "CUST-000001",
+        "items": [
+          {
+            "product_id": "PROD-000001",
+            "quantity": 1,
+            "unit_price": 999.99,
+            "discount": 50.00
+          }
+        ],
+        "total_discount": 100.00,
+        "payment_method": "card",
+        "status": "completed"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

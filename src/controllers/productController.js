@@ -25,6 +25,7 @@ exports.createProduct = async (req, res) => {
         profit_margin,
         supplier,
         minimum_stock_level,
+        quantity_in_stock,
         storage_location,
         date_added,
         status,
@@ -69,6 +70,7 @@ exports.createProduct = async (req, res) => {
           profit_margin,
           supplier,
           minimum_stock_level,
+          quantity_in_stock: quantity_in_stock || 1, // default to 1 if not provided
           storage_location,
           date_added,
           status,

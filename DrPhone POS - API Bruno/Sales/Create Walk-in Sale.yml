@@ -1,0 +1,30 @@
+info:
+  name: Create Walk-in Sale
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: http://localhost:3000/api/sales
+  body:
+    type: json
+    data: |-
+      {
+        "items": [
+          {
+            "product_id": "PROD-000001",
+            "quantity": 1,
+            "unit_price": 799.99,
+            "discount": 0
+          }
+        ],
+        "payment_method": "cash",
+        "status": "completed"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
