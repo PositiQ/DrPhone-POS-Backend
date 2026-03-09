@@ -1,0 +1,18 @@
+info:
+  name: Create Bank Vault
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/vault
+  body:
+    type: json
+    data: |-
+      {
+        "type": "bank",
+        "bank_name": "ABC Bank",
+        "branch_name": "Main Branch",
+        "account_number": "1234567890",
+        "account_holder_name": "John Doe"
+      }

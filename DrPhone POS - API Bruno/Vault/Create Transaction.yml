@@ -1,0 +1,17 @@
+info:
+  name: Create Transaction
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: http://localhost:3000/api/vault/transactions
+  body:
+    type: json
+    data: |-
+      {
+        "account_id": "ACCOUNT_001",
+        "type": "credit",
+        "amount": 1000.00,
+        "description": "Initial deposit"
+      }

@@ -1,0 +1,8 @@
+info:
+  name: Get Drawer Account
+  type: http
+  seq: 7
+
+http:
+  method: GET
+  url: http://localhost:3000/api/vault/drawer/DRAWER_001

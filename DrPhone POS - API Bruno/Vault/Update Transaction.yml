@@ -1,0 +1,16 @@
+info:
+  name: Update Transaction
+  type: http
+  seq: 13
+
+http:
+  method: PUT
+  url: http://localhost:3000/api/vault/transactions/TRANS_001
+  body:
+    type: json
+    data: |-
+      {
+        "amount": 1500.00,
+        "type": "credit",
+        "description": "Updated deposit amount"
+      }

@@ -8,6 +8,7 @@ Comprehensive API documentation is available in the `/Documentation` folder:
 
 - **[Product API Documentation](./Documentation/Product-API.md)** - Complete guide for Product and Stock Management APIs
 - **[Customer API Documentation](./Documentation/customer-API.md)** - Complete guide for Customer and Sales Management APIs
+- **[Vault & Transactions API Documentation](./Documentation/vault-and-transactions-API.md)** - Complete guide for Vault Management and Transaction APIs
 
 ## 📋 Table of Contents
 
@@ -32,7 +33,8 @@ app/
 │   │   └── db.config.js           # Database configuration
 │   ├── controllers/
 │   │   ├── productController.js   # Product & Stock CRUD operations
-│   │   └── customerController.js  # Customer & Sales CRUD operations
+│   │   ├── customerController.js  # Customer & Sales CRUD operations
+│   │   └── vaultController.js     # Vault & Transaction CRUD operations
 │   ├── middleware/
 │   │   └── errorHandler.js        # Global error handling
 │   ├── models/
@@ -42,15 +44,21 @@ app/
 │   │   ├── stockIssues.js         # Stock_Issues model
 │   │   ├── customer.js            # Customer model
 │   │   ├── customerSales.js       # Customer_Sales model
+│   │   ├── account.js             # Account (Vault) model
+│   │   ├── bankAcc.js             # Bank Account model
+│   │   ├── drawerAcc.js           # Drawer Account model
+│   │   ├── trasactions.js         # Transaction model
 │   │   └── id.js                  # ID generation utilities
 │   ├── routes/
 │   │   ├── products.js            # Product API routes
-│   │   └── customers.js           # Customer API routes
+│   │   ├── customers.js           # Customer API routes
+│   │   └── vault.js               # Vault API routes
 │   └── helpers/
 │       └── idGen.js               # Universal ID generator
 ├── Documentation/                  # 📚 API Documentation
 │   ├── Product-API.md             # Product & Stock API docs
-│   └── customer-API.md            # Customer & Sales API docs
+│   ├── customer-API.md            # Customer & Sales API docs
+│   └── vault-and-transactions-API.md  # Vault & Transaction API docs
 ├── data/                           # SQLite database folder
 │   └── database.db                # SQLite database file
 ├── app.js                          # Express app setup
@@ -127,6 +135,23 @@ GET http://localhost:3000/api/health
 
 **📖 For detailed Customer API documentation, see [customer-API.md](./Documentation/customer-API.md)**
 
+### Vault & Transaction Management
+- `POST /api/vault` - Create new vault (bank or drawer)
+- `GET /api/vault/balance` - Get total vault balance summary
+- `GET /api/vault/bank/:bank_acc_id` - Get bank account details
+- `PUT /api/vault/bank/:bank_acc_id` - Update bank account
+- `DELETE /api/vault/bank/:bank_acc_id` - Delete bank account
+- `GET /api/vault/drawer/:drawer_acc_id` - Get drawer account details
+- `PUT /api/vault/drawer/:drawer_acc_id` - Update drawer account
+- `DELETE /api/vault/drawer/:drawer_acc_id` - Delete drawer account
+- `POST /api/vault/transactions` - Create new transaction
+- `GET /api/vault/transactions` - Get all transactions (paginated)
+- `GET /api/vault/transactions/account/:account_id` - Get transaction history
+- `PUT /api/vault/transactions/:transaction_id` - Update transaction
+- `DELETE /api/vault/transactions/:transaction_id` - Delete transaction
+
+**📖 For detailed Vault & Transactions API documentation, see [vault-and-transactions-API.md](./Documentation/vault-and-transactions-API.md)**
+
 ## Database Models
 
 The system uses comprehensive models for product, inventory, and customer management:
@@ -194,6 +219,53 @@ Tracks all sales transactions and payment status.
 - `is_due_available` (Boolean)
 
 **Full Schema:** See [customer-API.md](./Documentation/customer-API.md#customer-sales-model)
+
+### Account (Vault)
+Manages vault accounts for both bank and cash drawer operations.
+
+**Key Fields:**
+- `acc_id` (String, Primary Key) - Auto-generated (ACCOUNT_XXX format)
+- `type` (Enum: bank, drawer)
+- `available_balance` (Decimal)
+
+**Full Schema:** See [vault-and-transactions-API.md](./Documentation/vault-and-transactions-API.md#data-models)
+
+### Bank Account
+Stores bank account details linked to vault accounts.
+
+**Key Fields:**
+- `bank_acc_id` (String, Primary Key) - Auto-generated (BANK_XXX format)
+- `acc_id` (Foreign Key to Account)
+- `bank_name` (String, Required)
+- `account_number` (String, Required)
+- `account_holder_name` (String, Required)
+
+**Full Schema:** See [vault-and-transactions-API.md](./Documentation/vault-and-transactions-API.md#data-models)
+
+### Drawer Account
+Manages cash drawer accounts linked to vault accounts.
+
+**Key Fields:**
+- `drawer_acc_id` (String, Primary Key) - Auto-generated (DRAWER_XXX format)
+- `acc_id` (Foreign Key to Account)
+- `name` (String, Required)
+- `location` (String, Required)
+
+**Full Schema:** See [vault-and-transactions-API.md](./Documentation/vault-and-transactions-API.md#data-models)
+
+### Transaction
+Records all financial transactions (credits and debits) for vault accounts.
+
+**Key Fields:**
+- `transaction_id` (String, Primary Key) - Auto-generated (TRANS_XXX format)
+- `account_id` (Foreign Key to Account)
+- `type` (Enum: credit, debit)
+- `amount` (Decimal, Required)
+- `transaction_date` (Date)
+- `account_balance_before` (Decimal)
+- `account_balance_after` (Decimal)
+
+**Full Schema:** See [vault-and-transactions-API.md](./Documentation/vault-and-transactions-API.md#data-models)
 
 ```json
 POST /api/products

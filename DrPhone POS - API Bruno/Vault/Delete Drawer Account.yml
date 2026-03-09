@@ -1,0 +1,8 @@
+info:
+  name: Delete Drawer Account
+  type: http
+  seq: 9
+
+http:
+  method: DELETE
+  url: http://localhost:3000/api/vault/drawer/DRAWER_001

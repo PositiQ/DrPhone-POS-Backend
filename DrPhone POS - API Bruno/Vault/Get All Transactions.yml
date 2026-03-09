@@ -1,0 +1,8 @@
+info:
+  name: Get All Transactions
+  type: http
+  seq: 11
+
+http:
+  method: GET
+  url: http://localhost:3000/api/vault/transactions?page=1

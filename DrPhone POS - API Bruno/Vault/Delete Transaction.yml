@@ -1,0 +1,8 @@
+info:
+  name: Delete Transaction
+  type: http
+  seq: 14
+
+http:
+  method: DELETE
+  url: http://localhost:3000/api/vault/transactions/TRANS_001

@@ -14,12 +14,10 @@ exports.createVault = async (req, res) => {
       account_holder_name,
     } = req.body;
 
-    if (!type || !drawer_name || !drawer_location) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Type, drawer name, and drawer location are required",
+    if(!type){
+        return res.status(400).json({
+            success: false,
+            error: "Vault type is required",
         });
     }
 
@@ -67,6 +65,13 @@ exports.createVault = async (req, res) => {
         },
       });
     } else if (type === "drawer") {
+      if (!drawer_name || !drawer_location) {
+        return res.status(400).json({
+          success: false,
+          error: "Type, drawer name, and drawer location are required",
+        });
+      }
+
       const newAccount = await account.create({
         acc_id: generateId("ACCOUNT"),
         type,
@@ -93,12 +98,10 @@ exports.createVault = async (req, res) => {
         },
       });
     } else {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "Invalid vault type. Must be 'bank' or 'drawer'",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "Invalid vault type. Must be 'bank' or 'drawer'",
+      });
     }
   } catch (error) {
     console.error("Error creating vault:", error);
@@ -115,58 +118,511 @@ exports.createNewTransaction = async (req, res) => {
   try {
     const { account_id, type, amount, description } = req.body;
 
-
     if (!account_id || !type || !amount) {
-        return res
-            .status(400)
-            .json({ success: false, error: "Account ID, type, and amount are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          error: "Account ID, type, and amount are required",
+        });
     }
 
     const account = await account.findOne({ where: { acc_id } });
     if (!account) {
-        return res.status(404).json({ success: false, error: "Account not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Account not found" });
     }
 
     const newTransaction = await trasactions.create({
-        transaction_id: generateId("TRANS"),
-        amount,
-        account_id,
-        type,
-        description,
-        transaction_date: new Date(),
-        account_balance_before: account.available_balance,
-        account_balance_after: type === "credit" ? parseFloat(account.available_balance) + parseFloat(amount) : parseFloat(account.available_balance) - parseFloat(amount),
+      transaction_id: generateId("TRANS"),
+      amount,
+      account_id,
+      type,
+      description,
+      transaction_date: new Date(),
+      account_balance_before: account.available_balance,
+      account_balance_after:
+        type === "credit"
+          ? parseFloat(account.available_balance) + parseFloat(amount)
+          : parseFloat(account.available_balance) - parseFloat(amount),
     });
-
 
     // Update account balance
     if (type === "credit") {
-        account.available_balance += amount;
+      account.available_balance += amount;
     } else if (type === "debit") {
-        account.available_balance -= amount;
+      account.available_balance -= amount;
     }
-    
+
     await account.save();
 
     res.status(201).json({
-        success: true,
-        message: "Transaction created successfully",
-        transaction: {
-            transaction_id: newTransaction.transaction_id,
-            acc_id: newTransaction.acc_id,
-            type: newTransaction.type,
-            amount: newTransaction.amount,
-            description: newTransaction.description,
-            date: newTransaction.date,
-        },
-        updated_balance: account.available_balance,
+      success: true,
+      message: "Transaction created successfully",
+      transaction: {
+        transaction_id: newTransaction.transaction_id,
+        acc_id: newTransaction.acc_id,
+        type: newTransaction.type,
+        amount: newTransaction.amount,
+        description: newTransaction.description,
+        date: newTransaction.date,
+      },
+      updated_balance: account.available_balance,
     });
   } catch (error) {
     console.error("Error creating transaction:", error);
     if (error.message) {
-        res.status(400).json({ success: false, error: error.message });
+      res.status(400).json({ success: false, error: error.message });
     } else {
-        res.status(500).json({ success: false, error: "Failed to create transaction" });
+      res
+        .status(500)
+        .json({ success: false, error: "Failed to create transaction" });
     }
+  }
+};
+
+// Get all total vault balance
+exports.getTotalVaultBalance = async (req, res) => {
+  try {
+    const totalBalance = await account.sum("available_balance");
+
+    // total credit
+    const totalCredit = await trasactions.sum("amount", {
+      where: { type: "credit" },
+    });
+
+    // total debit
+    const totalDebit = await trasactions.sum("amount", {
+      where: { type: "debit" },
+    });
+
+    res.status(200).json({
+      success: true,
+      totalBalance,
+      totalCredit,
+      totalDebit,
+    });
+  } catch (error) {
+    console.error("Error fetching total vault balance:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch total vault balance" });
+  }
+};
+
+// Get all transactions
+exports.getAllTransactions = async (req, res) => {
+  try {
+    const limit = 100;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const { count, rows } = await trasactions.findAndCountAll({
+      limit,
+      offset,
+    });
+
+    res.status(200).json({
+      success: true,
+      totalRecords: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      transactions: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch transactions" });
+  }
+};
+
+// Get transaction history for a specific account with pagination
+exports.getTransactionHistory = async (req, res) => {
+  try {
+    const { account_id } = req.params;
+
+    const limit = 100;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const acc = await account.findOne({ where: { acc_id: account_id } });
+
+    if (!acc) {
+      return res.status(404).json({
+        success: false,
+        error: "Account not found",
+      });
     }
+
+    const { count, rows } = await trasactions.findAndCountAll({
+      where: { account_id },
+      order: [["transaction_date", "DESC"]],
+      limit,
+      offset,
+    });
+
+    res.status(200).json({
+      success: true,
+      totalRecords: count,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      transactions: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching transaction history:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch transaction history",
+    });
+  }
+};
+
+// Get Bank Account (Vault)
+exports.getBankAccount = async (req, res) => {
+  try {
+    const { bank_acc_id } = req.params;
+
+    const bankAccount = await bankAcc.findOne({
+      where: { bank_acc_id },
+      include: [
+        {
+          model: account,
+          as: "account",
+        },
+      ],
+    });
+
+    if (!bankAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Bank account not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      vault: bankAccount,
+    });
+  } catch (error) {
+    console.error("Error fetching bank account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch bank account",
+    });
+  }
+};
+
+// Edit Bank Account (Vault)
+exports.editBankAccount = async (req, res) => {
+  try {
+    const { bank_acc_id } = req.params;
+    const { bank_name, branch_name, account_number, account_holder_name } = req.body;
+
+    const bankAccount = await bankAcc.findOne({ where: { bank_acc_id } });
+
+    if (!bankAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Bank account not found",
+      });
+    }
+
+    // Update fields if provided
+    if (bank_name !== undefined) bankAccount.bank_name = bank_name;
+    if (branch_name !== undefined) bankAccount.branch_name = branch_name;
+    if (account_number !== undefined) bankAccount.account_number = account_number;
+    if (account_holder_name !== undefined) bankAccount.account_holder_name = account_holder_name;
+
+    await bankAccount.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Bank account updated successfully",
+      vault: bankAccount,
+    });
+  } catch (error) {
+    console.error("Error updating bank account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update bank account",
+    });
+  }
+};
+
+// Delete Bank Account (Vault)
+exports.deleteBankAccount = async (req, res) => {
+  try {
+    const { bank_acc_id } = req.params;
+
+    const bankAccount = await bankAcc.findOne({ where: { bank_acc_id } });
+
+    if (!bankAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Bank account not found",
+      });
+    }
+
+    const acc_id = bankAccount.acc_id;
+
+    // Check if there are any transactions associated with this account
+    const transactionCount = await trasactions.count({
+      where: { account_id: acc_id },
+    });
+
+    if (transactionCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot delete bank account with existing transactions",
+      });
+    }
+
+    // Delete bank account first
+    await bankAccount.destroy();
+
+    // Delete associated account
+    await account.destroy({ where: { acc_id } });
+
+    res.status(200).json({
+      success: true,
+      message: "Bank account deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting bank account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete bank account",
+    });
+  }
+};
+
+// Get Drawer Account (Vault)
+exports.getDrawerAccount = async (req, res) => {
+  try {
+    const { drawer_acc_id } = req.params;
+
+    const drawerAccount = await drawerAcc.findOne({
+      where: { drawer_acc_id },
+      include: [
+        {
+          model: account,
+          as: "account",
+        },
+      ],
+    });
+
+    if (!drawerAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Drawer account not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      vault: drawerAccount,
+    });
+  } catch (error) {
+    console.error("Error fetching drawer account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch drawer account",
+    });
+  }
+};
+
+// Edit Drawer Account (Vault)
+exports.editDrawerAccount = async (req, res) => {
+  try {
+    const { drawer_acc_id } = req.params;
+    const { name, location } = req.body;
+
+    const drawerAccount = await drawerAcc.findOne({ where: { drawer_acc_id } });
+
+    if (!drawerAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Drawer account not found",
+      });
+    }
+
+    // Update fields if provided
+    if (name !== undefined) drawerAccount.name = name;
+    if (location !== undefined) drawerAccount.location = location;
+
+    await drawerAccount.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Drawer account updated successfully",
+      vault: drawerAccount,
+    });
+  } catch (error) {
+    console.error("Error updating drawer account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update drawer account",
+    });
+  }
+};
+
+// Delete Drawer Account (Vault)
+exports.deleteDrawerAccount = async (req, res) => {
+  try {
+    const { drawer_acc_id } = req.params;
+
+    const drawerAccount = await drawerAcc.findOne({ where: { drawer_acc_id } });
+
+    if (!drawerAccount) {
+      return res.status(404).json({
+        success: false,
+        error: "Drawer account not found",
+      });
+    }
+
+    const acc_id = drawerAccount.acc_id;
+
+    // Check if there are any transactions associated with this account
+    const transactionCount = await trasactions.count({
+      where: { account_id: acc_id },
+    });
+
+    if (transactionCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot delete drawer account with existing transactions",
+      });
+    }
+
+    // Delete drawer account first
+    await drawerAccount.destroy();
+
+    // Delete associated account
+    await account.destroy({ where: { acc_id } });
+
+    res.status(200).json({
+      success: true,
+      message: "Drawer account deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting drawer account:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete drawer account",
+    });
+  }
+};
+
+// Update Transaction
+exports.updateTransaction = async (req, res) => {
+  try {
+    const { transaction_id } = req.params;
+    const { amount, type, description } = req.body;
+
+    const transaction = await trasactions.findOne({ where: { transaction_id } });
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: "Transaction not found",
+      });
+    }
+
+    const acc = await account.findOne({ where: { acc_id: transaction.account_id } });
+
+    if (!acc) {
+      return res.status(404).json({
+        success: false,
+        error: "Associated account not found",
+      });
+    }
+
+    // Reverse the old transaction from account balance
+    if (transaction.type === "credit") {
+      acc.available_balance -= parseFloat(transaction.amount);
+    } else if (transaction.type === "debit") {
+      acc.available_balance += parseFloat(transaction.amount);
+    }
+
+    // Update transaction fields
+    if (amount !== undefined) transaction.amount = amount;
+    if (type !== undefined) transaction.type = type;
+    if (description !== undefined) transaction.description = description;
+
+    // Apply the new transaction to account balance
+    const newAmount = parseFloat(transaction.amount);
+    if (transaction.type === "credit") {
+      acc.available_balance += newAmount;
+    } else if (transaction.type === "debit") {
+      acc.available_balance -= newAmount;
+    }
+
+    // Update balance tracking in transaction
+    transaction.account_balance_after = acc.available_balance;
+
+    await transaction.save();
+    await acc.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Transaction updated successfully",
+      transaction: transaction,
+      updated_balance: acc.available_balance,
+    });
+  } catch (error) {
+    console.error("Error updating transaction:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update transaction",
+    });
+  }
+};
+
+// Delete Transaction
+exports.deleteTransaction = async (req, res) => {
+  try {
+    const { transaction_id } = req.params;
+
+    const transaction = await trasactions.findOne({ where: { transaction_id } });
+
+    if (!transaction) {
+      return res.status(404).json({
+        success: false,
+        error: "Transaction not found",
+      });
+    }
+
+    const acc = await account.findOne({ where: { acc_id: transaction.account_id } });
+
+    if (!acc) {
+      return res.status(404).json({
+        success: false,
+        error: "Associated account not found",
+      });
+    }
+
+    // Reverse the transaction from account balance
+    if (transaction.type === "credit") {
+      acc.available_balance -= parseFloat(transaction.amount);
+    } else if (transaction.type === "debit") {
+      acc.available_balance += parseFloat(transaction.amount);
+    }
+
+    await acc.save();
+    await transaction.destroy();
+
+    res.status(200).json({
+      success: true,
+      message: "Transaction deleted successfully",
+      updated_balance: acc.available_balance,
+    });
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete transaction",
+    });
+  }
 };

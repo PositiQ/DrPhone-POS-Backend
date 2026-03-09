@@ -1,0 +1,17 @@
+info:
+  name: Update Bank Account
+  type: http
+  seq: 5
+
+http:
+  method: PUT
+  url: http://localhost:3000/api/vault/bank/BANK_001
+  body:
+    type: json
+    data: |-
+      {
+        "bank_name": "XYZ Bank",
+        "branch_name": "Downtown Branch",
+        "account_number": "9876543210",
+        "account_holder_name": "Jane Smith"
+      }
