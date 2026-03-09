@@ -9,6 +9,10 @@ const customer = require('./customer');
 const customer_sales = require('./customerSales');
 const sales = require('./sale');
 const itemSales = require('./ItemSales');
+const account = require('./account');
+const bankAcc = require('./bankAcc');
+const drawerAcc = require('./drawerAcc');
+const trasactions = require('./trasactions');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -38,4 +42,8 @@ module.exports = {
     customer_sales,
     sales,
     itemSales,
+    account,
+    bankAcc,
+    drawerAcc,
+    trasactions,
 };
