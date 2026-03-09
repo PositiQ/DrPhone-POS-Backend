@@ -1,4 +1,11 @@
-const { sales, itemSales, Product, customer, Product_Stock } = require("../models");
+const {
+  sales,
+  itemSales,
+  Product,
+  customer,
+  customer_sales,
+  Product_Stock,
+} = require("../models");
 const generateId = require("../helpers/idGen");
 const { Op, ValidationError, UniqueConstraintError } = require("sequelize");
 
@@ -117,8 +124,10 @@ exports.createSale = async (req, res) => {
         totalAmount -= total_discount;
       }
 
+      const saleStatus = status || "completed";
+
       // Create the sale
-      const newSale = await sales.create(
+      await sales.create(
         {
           sales_id: salesId,
           customer_id: customer_id || null,
@@ -126,7 +135,7 @@ exports.createSale = async (req, res) => {
           total_amount: totalAmount,
           sales_date: saleDate,
           payment_method,
-          status: status || "completed",
+          status: saleStatus,
         },
         { transaction }
       );
@@ -134,8 +143,23 @@ exports.createSale = async (req, res) => {
       // Create all item sales
       await itemSales.bulkCreate(itemsToCreate, { transaction });
 
-      // This would typically update customer_sales table
-      // Implementation depends on business logic for customer_sales tracking
+      // Track customer sale summary only for customer-linked sales.
+      if (customer_id) {
+        const paidAmount = saleStatus === "completed" ? totalAmount : 0;
+        const isDueAvailable = paidAmount < totalAmount;
+
+        await customer_sales.create(
+          {
+            customer_id,
+            total_sales_amount: totalAmount,
+            last_sales_date: saleDate,
+            is_due_available: isDueAvailable,
+            paid_amount: paidAmount,
+            payment_status: isDueAvailable ? "pending" : "paid",
+          },
+          { transaction }
+        );
+      }
 
       return salesId;
     });
