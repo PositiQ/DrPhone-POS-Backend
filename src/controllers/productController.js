@@ -29,6 +29,7 @@ exports.createProduct = async (req, res) => {
         storage_location,
         date_added,
         status,
+        product_type,
       } = req.body;
 
       const productID = await generateId("PROD");
@@ -37,6 +38,13 @@ exports.createProduct = async (req, res) => {
       if (!productName || !price || !brand) {
         throw new Error(
           "Missing required fields: productName, price, and brand are required.",
+        );
+      }
+
+      // Phone-specific validation: IMEI is required for phones
+      if (product_type === 'phone' && !IMEI) {
+        throw new Error(
+          "IMEI is required for phone products.",
         );
       }
 
@@ -54,9 +62,10 @@ exports.createProduct = async (req, res) => {
           capacity,
           condition,
           warrenty,
-          IMEI,
+          IMEI: product_type === 'phone' ? IMEI : null,
           barcode,
           serialNumber,
+          product_type: product_type || 'phone',
         },
         { transaction },
       );
@@ -189,22 +198,62 @@ exports.searchProducts = async (req, res) => {
 // Update product
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await Product.findByPk(req.params.id);
+    const result = await Product.sequelize.transaction(async (transaction) => {
+      const product = await Product.findByPk(req.params.id, {
+        include: Product_Stock,
+      });
 
-    if (!product) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Product not found" });
-    }
+      if (!product) {
+        throw new Error("Product not found");
+      }
 
-    await product.update(req.body);
+      // Separate product fields from product_stock fields
+      const productFields = {};
+      const stockFields = {};
+      const stockFieldKeys = [
+        'sku',
+        'cost_price',
+        'selling_price',
+        'profit_margin',
+        'supplier',
+        'minimum_stock_level',
+        'quantity_in_stock',
+        'storage_location',
+        'date_added',
+        'status'
+      ];
+
+      Object.keys(req.body).forEach(key => {
+        if (stockFieldKeys.includes(key)) {
+          stockFields[key] = req.body[key];
+        } else {
+          productFields[key] = req.body[key];
+        }
+      });
+
+      // Update product fields
+      if (Object.keys(productFields).length > 0) {
+        await product.update(productFields, { transaction });
+      }
+
+      // Update product_stock fields
+      if (Object.keys(stockFields).length > 0 && product.Product_Stock) {
+        await product.Product_Stock.update(stockFields, { transaction });
+      }
+
+      // Reload to get updated data
+      await product.reload({ include: Product_Stock });
+
+      return product;
+    });
 
     res.status(200).json({
       success: true,
       message: "Product updated successfully",
-      data: product,
+      data: result,
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Error updating product",

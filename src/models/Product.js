@@ -57,6 +57,11 @@ const Product = sequelize.define('Product', {
     allowNull: true,
     unique: true,
   },
+  product_type: {
+    type: DataTypes.ENUM('phone', 'accessory'),
+    allowNull: false,
+    defaultValue: 'phone',
+  },
 }, {
   timestamps: true,
   tableName: 'products',
