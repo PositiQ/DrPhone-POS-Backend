@@ -8,6 +8,9 @@ router.post('/', vaultController.createVault);
 // GET total vault balance with credit/debit summary
 router.get('/balance', vaultController.getTotalVaultBalance);
 
+// GET all vault accounts (for dropdowns)
+router.get('/accounts', vaultController.getVaultAccounts);
+
 // GET all transactions (paginated)
 router.get('/transactions', vaultController.getAllTransactions);
 

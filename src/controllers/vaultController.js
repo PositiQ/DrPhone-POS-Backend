@@ -1,5 +1,6 @@
 const { account, bankAcc, drawerAcc, trasactions } = require("../models");
 const generateId = require("../helpers/idGen");
+const { Op } = require("sequelize");
 
 // Create a new vault
 exports.createVault = async (req, res) => {
@@ -35,12 +36,12 @@ exports.createVault = async (req, res) => {
         });
       }
       const newAccount = await account.create({
-        acc_id: generateId("ACCOUNT"),
+        acc_id: await generateId("ACCOUNT"),
         type,
         available_balance: 0.0,
       });
       const newBankAcc = await bankAcc.create({
-        bank_acc_id: generateId("BANK"),
+        bank_acc_id: await generateId("BANK"),
         acc_id: newAccount.acc_id,
         bank_name,
         branch_name,
@@ -73,12 +74,12 @@ exports.createVault = async (req, res) => {
       }
 
       const newAccount = await account.create({
-        acc_id: generateId("ACCOUNT"),
+        acc_id: await generateId("ACCOUNT"),
         type,
         available_balance: 0.0,
       });
       const newDrawerAcc = await drawerAcc.create({
-        drawer_acc_id: generateId("DRAWER"),
+        drawer_acc_id: await generateId("DRAWER"),
         acc_id: newAccount.acc_id,
         name: drawer_name,
         location: drawer_location,
@@ -113,6 +114,72 @@ exports.createVault = async (req, res) => {
   }
 };
 
+// Get all vault accounts for dropdowns/selection
+exports.getVaultAccounts = async (req, res) => {
+  try {
+    const accounts = await account.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    const accountIds = accounts.map((item) => item.acc_id);
+
+    if (!accountIds.length) {
+      return res.status(200).json({
+        success: true,
+        accounts: [],
+      });
+    }
+
+    const [banks, drawers] = await Promise.all([
+      bankAcc.findAll({ where: { acc_id: { [Op.in]: accountIds } } }),
+      drawerAcc.findAll({ where: { acc_id: { [Op.in]: accountIds } } }),
+    ]);
+
+    const bankByAccId = new Map(banks.map((item) => [item.acc_id, item]));
+    const drawerByAccId = new Map(drawers.map((item) => [item.acc_id, item]));
+
+    const vaultAccounts = accounts.map((item) => {
+      const bank = bankByAccId.get(item.acc_id);
+      const drawer = drawerByAccId.get(item.acc_id);
+
+      if (item.type === "bank") {
+        return {
+          account_id: item.acc_id,
+          account_type: item.type,
+          available_balance: item.available_balance,
+          bank_acc_id: bank?.bank_acc_id || null,
+          bank_name: bank?.bank_name || null,
+          branch_name: bank?.branch_name || null,
+          account_number: bank?.account_number || null,
+          account_holder_name: bank?.account_holder_name || null,
+          display_name: `${bank?.bank_name || "Bank"} (${bank?.account_number || "N/A"})`,
+        };
+      }
+
+      return {
+        account_id: item.acc_id,
+        account_type: item.type,
+        available_balance: item.available_balance,
+        drawer_acc_id: drawer?.drawer_acc_id || null,
+        name: drawer?.name || null,
+        location: drawer?.location || null,
+        display_name: `${drawer?.name || "Drawer"} (${drawer?.location || "N/A"})`,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      accounts: vaultAccounts,
+    });
+  } catch (error) {
+    console.error("Error fetching vault accounts:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to fetch vault accounts",
+    });
+  }
+};
+
 // New Transaction
 exports.createNewTransaction = async (req, res) => {
   try {
@@ -127,48 +194,50 @@ exports.createNewTransaction = async (req, res) => {
         });
     }
 
-    const account = await account.findOne({ where: { acc_id } });
-    if (!account) {
+    const acc = await account.findOne({ where: { acc_id: account_id } });
+    if (!acc) {
       return res
         .status(404)
         .json({ success: false, error: "Account not found" });
     }
 
+    const numericAmount = parseFloat(amount);
+
     const newTransaction = await trasactions.create({
-      transaction_id: generateId("TRANS"),
-      amount,
+      transaction_id: await generateId("TRANS"),
+      amount: numericAmount,
       account_id,
       type,
       description,
       transaction_date: new Date(),
-      account_balance_before: account.available_balance,
+      account_balance_before: acc.available_balance,
       account_balance_after:
         type === "credit"
-          ? parseFloat(account.available_balance) + parseFloat(amount)
-          : parseFloat(account.available_balance) - parseFloat(amount),
+          ? parseFloat(acc.available_balance) + numericAmount
+          : parseFloat(acc.available_balance) - numericAmount,
     });
 
     // Update account balance
     if (type === "credit") {
-      account.available_balance += amount;
+      acc.available_balance = parseFloat(acc.available_balance) + numericAmount;
     } else if (type === "debit") {
-      account.available_balance -= amount;
+      acc.available_balance = parseFloat(acc.available_balance) - numericAmount;
     }
 
-    await account.save();
+    await acc.save();
 
     res.status(201).json({
       success: true,
       message: "Transaction created successfully",
       transaction: {
         transaction_id: newTransaction.transaction_id,
-        acc_id: newTransaction.acc_id,
+        account_id: newTransaction.account_id,
         type: newTransaction.type,
         amount: newTransaction.amount,
         description: newTransaction.description,
-        date: newTransaction.date,
+        transaction_date: newTransaction.transaction_date,
       },
-      updated_balance: account.available_balance,
+      updated_balance: acc.available_balance,
     });
   } catch (error) {
     console.error("Error creating transaction:", error);
