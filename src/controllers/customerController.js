@@ -1,4 +1,4 @@
-const { customer, customer_sales } = require("../models");
+const { customer, customer_sales, sales: salesModel } = require("../models");
 const generateId = require("../helpers/idGen");
 const { Op } = require("sequelize");
 
@@ -97,6 +97,11 @@ exports.getCustomerById = async (req, res) => {
           model: customer_sales,
           as: "customer_sales",
         },
+        {
+          model: salesModel,
+          as: "sales",
+          attributes: ["sales_id", "total_amount", "sales_date", "status"],
+        },
       ],
       transaction: t,
     });
@@ -143,6 +148,11 @@ exports.getAllCustomers = async (req, res) => {
         {
           model: customer_sales,
           as: "customer_sales",
+        },
+        {
+          model: salesModel,
+          as: "sales",
+          attributes: ["sales_id", "total_amount", "sales_date", "status"],
         },
       ],
       limit: limit,
@@ -217,6 +227,11 @@ exports.searchCustomers = async (req, res) => {
         {
           model: customer_sales,
           as: "customer_sales",
+        },
+        {
+          model: salesModel,
+          as: "sales",
+          attributes: ["sales_id", "total_amount", "sales_date", "status"],
         },
       ],
       transaction: t,
