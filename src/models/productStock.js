@@ -32,6 +32,10 @@ const Product_Stock = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
+    wholesale_price: {
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: true,
+    },
     profit_margin:{
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true,
