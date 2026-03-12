@@ -82,7 +82,7 @@ exports.createProduct = async (req, res) => {
           supplier,
           minimum_stock_level,
           quantity_in_stock: quantity_in_stock || 1, // default to 1 if not provided
-          storage_location,
+          storage_location: storage_location || "Main Shop",
           date_added,
           status,
         },
