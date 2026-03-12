@@ -65,7 +65,7 @@ const Product_Stock = sequelize.define(
         defaultValue: DataTypes.NOW,
     },
     status:{
-        type: DataTypes.ENUM('active', 'inactive', 'discontinued', 'in_stock', 'sold'),
+        type: DataTypes.ENUM('active', 'inactive', 'discontinued', 'sold', 'issued'),
         allowNull: false,
         defaultValue: 'active',
     }

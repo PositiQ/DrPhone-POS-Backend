@@ -23,6 +23,18 @@ const Stock_Issues = sequelize.define(
         type: DataTypes.STRING,
         allowNull: false,
     },
+    issued_shop_id:{
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    issued_stock:{
+        type: DataTypes.INTEGER,
+        allowNull: false,
+    },
+    selling_price:{
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
     issued_date:{
         type: DataTypes.DATE,
         allowNull: false,
