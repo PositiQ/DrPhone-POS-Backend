@@ -15,6 +15,8 @@ const drawerAcc = require('./drawerAcc');
 const trasactions = require('./trasactions');
 const shop = require('./shop');
 const shopSales = require('./shopSales');
+const expense = require('./expense');
+const expenseCategory = require('./expenseCategory');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -47,6 +49,13 @@ Stock_Issues.belongsTo(shop, { foreignKey: 'issued_shop_id', as: 'shop' });
 shop.hasOne(shopSales, { foreignKey: 'shop_id', as: 'sales', onDelete: 'CASCADE' });
 shopSales.belongsTo(shop, { foreignKey: 'shop_id', as: 'shop' });
 
+// Expense associations
+expense.belongsTo(account, { foreignKey: 'account_id', as: 'account' });
+account.hasMany(expense, { foreignKey: 'account_id', as: 'expenses' });
+
+expense.belongsTo(expenseCategory, { foreignKey: 'category_id', as: 'categoryRef' });
+expenseCategory.hasMany(expense, { foreignKey: 'category_id', as: 'expenses' });
+
 
 
 
@@ -66,4 +75,6 @@ module.exports = {
     trasactions,
     shop,
     shopSales,
+    expense,
+    expenseCategory,
 };

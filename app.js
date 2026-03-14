@@ -43,6 +43,7 @@ app.use('/api/shops', require('./src/routes/shops'));
 app.use('/api/inventory', require('./src/routes/inventory'));
 app.use('/api/sales', require('./src/routes/sales'));
 app.use('/api/vault', require('./src/routes/vault'));
+app.use('/api/expenses', require('./src/routes/expenses'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
