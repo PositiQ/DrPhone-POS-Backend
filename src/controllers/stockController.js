@@ -190,3 +190,73 @@ exports.getAllStockIssues = async (req, res) => {
     });
   }
 };
+
+exports.completeStockIssueSale = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const issueId = req.params.id;
+
+    const issue = await Stock_Issues.findByPk(issueId, { transaction: t, lock: t.LOCK.UPDATE });
+
+    if (!issue) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: 'Stock issue not found' });
+    }
+
+    if (String(issue.status).toLowerCase() === 'sold') {
+      await t.rollback();
+      return res.status(400).json({ success: false, message: 'Sale already completed' });
+    }
+
+    const issuedStock = Number(issue.issued_stock || 0);
+    const sellingPrice = Number(issue.selling_price || 0);
+    const amount = issuedStock * sellingPrice;
+
+    const [sales] = await shopSales.findOrCreate({
+      where: { shop_id: issue.issued_shop_id },
+      defaults: {
+        shop_id: issue.issued_shop_id,
+        total_sales: 0,
+        total_paid: 0,
+        total_outstanding: 0,
+        total_devices: 0,
+        active_devices: 0,
+        sold_devices: 0,
+      },
+      transaction: t,
+    });
+
+    await issue.update({ status: 'sold' }, { transaction: t });
+
+    await sales.increment({
+      active_devices: -issuedStock,
+      sold_devices: issuedStock,
+      total_paid: amount,
+      total_outstanding: -amount,
+    }, { transaction: t });
+
+    await sales.reload({ transaction: t });
+
+    // Guard against legacy drift creating negative counters.
+    await sales.update({
+      active_devices: Math.max(Number(sales.active_devices || 0), 0),
+      total_outstanding: Math.max(Number(sales.total_outstanding || 0), 0),
+    }, { transaction: t });
+
+    await t.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Sale marked as completed',
+      data: issue,
+    });
+  } catch (error) {
+    await t.rollback();
+    return res.status(500).json({
+      success: false,
+      message: 'Error completing sale',
+      error: error.message,
+    });
+  }
+};
