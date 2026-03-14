@@ -17,6 +17,11 @@ const shop = require('./shop');
 const shopSales = require('./shopSales');
 const expense = require('./expense');
 const expenseCategory = require('./expenseCategory');
+const supplier = require('./supplier');
+const supplierPurchase = require('./supplierPurchase');
+const supplierPurchaseItem = require('./supplierPurchaseItem');
+const supplierPayment = require('./supplierPayment');
+const supplierCheque = require('./supplierCheque');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -56,6 +61,25 @@ account.hasMany(expense, { foreignKey: 'account_id', as: 'expenses' });
 expense.belongsTo(expenseCategory, { foreignKey: 'category_id', as: 'categoryRef' });
 expenseCategory.hasMany(expense, { foreignKey: 'category_id', as: 'expenses' });
 
+// Supplier associations
+supplier.hasMany(supplierPurchase, { foreignKey: 'supplier_id', as: 'purchases', onDelete: 'CASCADE' });
+supplierPurchase.belongsTo(supplier, { foreignKey: 'supplier_id', as: 'supplier' });
+
+supplierPurchase.hasMany(supplierPurchaseItem, { foreignKey: 'supplier_purchase_id', as: 'items', onDelete: 'CASCADE' });
+supplierPurchaseItem.belongsTo(supplierPurchase, { foreignKey: 'supplier_purchase_id', as: 'purchase' });
+
+supplier.hasMany(supplierPayment, { foreignKey: 'supplier_id', as: 'payments', onDelete: 'CASCADE' });
+supplierPayment.belongsTo(supplier, { foreignKey: 'supplier_id', as: 'supplier' });
+
+supplier.hasMany(supplierCheque, { foreignKey: 'supplier_id', as: 'cheques', onDelete: 'CASCADE' });
+supplierCheque.belongsTo(supplier, { foreignKey: 'supplier_id', as: 'supplier' });
+
+supplierPurchase.belongsTo(account, { foreignKey: 'account_id', as: 'account' });
+account.hasMany(supplierPurchase, { foreignKey: 'account_id', as: 'supplierPurchases' });
+
+supplierPayment.belongsTo(account, { foreignKey: 'account_id', as: 'account' });
+account.hasMany(supplierPayment, { foreignKey: 'account_id', as: 'supplierPayments' });
+
 
 
 
@@ -77,4 +101,9 @@ module.exports = {
     shopSales,
     expense,
     expenseCategory,
+    supplier,
+    supplierPurchase,
+    supplierPurchaseItem,
+    supplierPayment,
+    supplierCheque,
 };
