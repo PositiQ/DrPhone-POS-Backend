@@ -4,15 +4,182 @@ const {
   shop,
   Product,
   shopSales,
+  account,
+  drawerAcc,
+  trasactions,
+  customer,
+  customer_sales,
+  sales,
   sequelize,
 } = require("../models");
+const generateId = require("../helpers/idGen");
+
+async function resolveVaultAccount(accountId, transaction) {
+  if (accountId) {
+    const selected = await account.findOne({
+      where: { acc_id: accountId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (selected) return selected;
+  }
+
+  const latestDrawer = await account.findOne({
+    where: { type: "drawer" },
+    order: [["createdAt", "DESC"]],
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  if (latestDrawer) return latestDrawer;
+
+  const anyAccount = await account.findOne({
+    order: [["createdAt", "DESC"]],
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+
+  if (anyAccount) return anyAccount;
+
+  // Ensure a valid vault target exists so sold/settled flows always create a transaction.
+  const defaultAccount = await account.create({
+    acc_id: await generateId("ACCOUNT", transaction),
+    type: "drawer",
+    available_balance: 0,
+  }, { transaction });
+
+  await drawerAcc.create({
+    drawer_acc_id: await generateId("DRAWER", transaction),
+    acc_id: defaultAccount.acc_id,
+    name: "System Drawer",
+    location: "Main Shop",
+    added_date: new Date(),
+  }, { transaction });
+
+  return defaultAccount;
+}
+
+async function createCreditTransaction({ accountRow, amount, description, transaction }) {
+  const numericAmount = Number(amount || 0);
+  if (!accountRow || numericAmount <= 0) return null;
+
+  const beforeBalance = Number(accountRow.available_balance || 0);
+  const afterBalance = beforeBalance + numericAmount;
+
+  const transactionRow = await trasactions.create({
+    transaction_id: await generateId("TRANS", transaction),
+    amount: numericAmount,
+    account_id: accountRow.acc_id,
+    type: "credit",
+    description,
+    transaction_date: new Date(),
+    account_balance_before: beforeBalance,
+    account_balance_after: afterBalance,
+  }, { transaction });
+
+  await accountRow.update({ available_balance: afterBalance }, { transaction });
+  return transactionRow;
+}
+
+async function resolveShopOwner(shopId, transaction) {
+  const shopRecord = await shop.findByPk(shopId, {
+    transaction,
+    attributes: ["shop_id", "owner_customer_id", "name"],
+  });
+
+  const ownerCustomerId = shopRecord?.owner_customer_id;
+  if (!ownerCustomerId) return { shopRecord, ownerCustomerId: null };
+
+  const owner = await customer.findByPk(ownerCustomerId, {
+    transaction,
+    attributes: ["customer_id"],
+  });
+
+  return {
+    shopRecord,
+    ownerCustomerId: owner ? ownerCustomerId : null,
+  };
+}
+
+async function syncOwnerSaleForIssue({ issue, nextStatus, paymentMethod, transaction }) {
+  const numericAmount = Number(issue?.issued_stock || 0) * Number(issue?.selling_price || 0);
+  if (numericAmount <= 0) {
+    return { ownerCustomerId: null, saleId: null };
+  }
+
+  const { ownerCustomerId } = await resolveShopOwner(issue.issued_shop_id, transaction);
+  if (!ownerCustomerId) {
+    return { ownerCustomerId: null, saleId: null };
+  }
+
+  const normalizedStatus = String(nextStatus || issue.status || "pending_payment").toLowerCase();
+  const isSold = normalizedStatus === "sold";
+  const normalizedPaymentMethod = isSold
+    ? String(paymentMethod || "cash").toLowerCase()
+    : "credit";
+  const saleStatus = isSold ? "completed" : "pending";
+
+  let ownerSale = null;
+  if (issue.linked_sales_id) {
+    ownerSale = await sales.findOne({
+      where: {
+        sales_id: issue.linked_sales_id,
+        customer_id: ownerCustomerId,
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+  }
+
+  if (ownerSale) {
+    await ownerSale.update({
+      total_amount: Number(numericAmount.toFixed(2)),
+      payment_method: normalizedPaymentMethod,
+      status: saleStatus,
+      sales_date: new Date(),
+    }, { transaction });
+  } else {
+    ownerSale = await sales.create({
+      sales_id: await generateId("SALE", transaction),
+      customer_id: ownerCustomerId,
+      total_discount: 0,
+      total_amount: Number(numericAmount.toFixed(2)),
+      sales_date: new Date(),
+      payment_method: normalizedPaymentMethod,
+      status: saleStatus,
+    }, { transaction });
+
+    await issue.update({ linked_sales_id: ownerSale.sales_id }, { transaction });
+  }
+
+  return {
+    ownerCustomerId,
+    saleId: ownerSale.sales_id,
+    amount: Number(numericAmount.toFixed(2)),
+    saleStatus,
+  };
+}
+
+async function addCustomerSalesLedger({ customerId, amount, paid, transaction }) {
+  const numericAmount = Number(amount || 0);
+  if (!customerId || numericAmount <= 0) return null;
+
+  return customer_sales.create({
+    customer_id: customerId,
+    total_sales_amount: Number(numericAmount.toFixed(2)),
+    last_sales_date: new Date(),
+    is_due_available: !paid,
+    paid_amount: paid ? Number(numericAmount.toFixed(2)) : 0,
+    payment_status: paid ? "paid" : "pending",
+  }, { transaction });
+}
 
 // Issue a stock item
 exports.issueStock = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    const { product_id, issued_shop_id, issued_stock, selling_price, payment_status } = req.body;
+    const { product_id, issued_shop_id, issued_stock, selling_price, payment_status, payment_method, account_id } = req.body;
 
     const incomingStatus = String(payment_status || "pending_payment").toLowerCase();
     const status = incomingStatus === "paid" ? "sold" : incomingStatus;
@@ -86,15 +253,50 @@ exports.issueStock = async (req, res) => {
     await productStock.update({
       quantity_in_stock: productStock.quantity_in_stock - issued_stock,
       status: "issued",
-      storage_location: shopName
+      // Product_Stock tracks main-shop remaining quantity, not issued units.
+      storage_location: "Main Shop"
     }, { transaction: t });
+
+    const ownerSaleSync = await syncOwnerSaleForIssue({
+      issue: issueStock,
+      nextStatus: status,
+      paymentMethod: payment_method,
+      transaction: t,
+    });
+
+    await addCustomerSalesLedger({
+      customerId: ownerSaleSync.ownerCustomerId,
+      amount,
+      paid: isPaid,
+      transaction: t,
+    });
+
+    let transactionInfo = null;
+    if (isPaid) {
+      const vaultAccount = await resolveVaultAccount(account_id, t);
+      const txn = await createCreditTransaction({
+        accountRow: vaultAccount,
+        amount,
+        description: `Direct sold issue for shop ${shopName} (${issued_shop_id})`,
+        transaction: t,
+      });
+
+      if (txn) {
+        transactionInfo = {
+          transaction_id: txn.transaction_id,
+          account_id: txn.account_id,
+          amount: Number(txn.amount || 0),
+        };
+      }
+    }
 
     await t.commit();
 
     res.status(200).json({
       success: true,
       message: "Stock issued successfully",
-      data: issueStock
+      data: issueStock,
+      transaction: transactionInfo,
     });
 
   } catch (error) {
@@ -276,6 +478,8 @@ exports.settleShopPayments = async (req, res) => {
   try {
     const { shopId } = req.params;
     const settlementType = String(req.body.type || 'full').toLowerCase();
+    const accountId = req.body.account_id;
+    const paymentMethod = req.body.payment_method;
 
     if (!['full', 'half'].includes(settlementType)) {
       await t.rollback();
@@ -333,13 +537,26 @@ exports.settleShopPayments = async (req, res) => {
       }
     }
 
-    await Stock_Issues.update(
-      { status: 'sold' },
-      {
-        where: { id: issueIdsToSettle },
+    const issueIdSet = new Set(issueIdsToSettle);
+    const issuesToSettle = pendingIssues.filter((issue) => issueIdSet.has(issue.id));
+
+    for (const issue of issuesToSettle) {
+      await issue.update({ status: 'sold' }, { transaction: t });
+
+      const ownerSaleSync = await syncOwnerSaleForIssue({
+        issue,
+        nextStatus: 'sold',
+        paymentMethod,
         transaction: t,
-      }
-    );
+      });
+
+      await addCustomerSalesLedger({
+        customerId: ownerSaleSync.ownerCustomerId,
+        amount: ownerSaleSync.amount,
+        paid: true,
+        transaction: t,
+      });
+    }
 
     const [sales] = await shopSales.findOrCreate({
       where: { shop_id: shopId },
@@ -368,6 +585,31 @@ exports.settleShopPayments = async (req, res) => {
       total_outstanding: Math.max(Number(sales.total_outstanding || 0), 0),
     }, { transaction: t });
 
+    const shopRecord = await shop.findByPk(shopId, {
+      transaction: t,
+      attributes: ["name", "shop_id"],
+    });
+
+    const vaultAccount = await resolveVaultAccount(accountId, t);
+    const txn = await createCreditTransaction({
+      accountRow: vaultAccount,
+      amount: settledAmount,
+      description: `${settlementType === 'full' ? 'Full' : 'Half'} settlement for shop ${shopRecord?.name || shopId} (${shopRecord?.shop_id || shopId})`,
+      transaction: t,
+    });
+
+    const transactionMeta = txn
+      ? {
+          recorded: true,
+          transaction_id: txn.transaction_id,
+          account_id: txn.account_id,
+          amount: Number(txn.amount || 0),
+        }
+      : {
+          recorded: false,
+          reason: "No vault account available for automatic transaction",
+        };
+
     await t.commit();
 
     return res.status(200).json({
@@ -382,6 +624,7 @@ exports.settleShopPayments = async (req, res) => {
         amount_settled: settledAmount,
         previous_outstanding: totalOutstanding,
         remaining_outstanding: Math.max(totalOutstanding - settledAmount, 0),
+        transaction: transactionMeta,
       },
     });
   } catch (error) {
@@ -399,6 +642,8 @@ exports.completeStockIssueSale = async (req, res) => {
 
   try {
     const issueId = req.params.id;
+    const accountId = req.body?.account_id;
+    const paymentMethod = req.body?.payment_method;
 
     const issue = await Stock_Issues.findByPk(issueId, { transaction: t, lock: t.LOCK.UPDATE });
 
@@ -447,12 +692,52 @@ exports.completeStockIssueSale = async (req, res) => {
       total_outstanding: Math.max(Number(sales.total_outstanding || 0), 0),
     }, { transaction: t });
 
+    const shopRecord = await shop.findByPk(issue.issued_shop_id, {
+      transaction: t,
+      attributes: ["name", "shop_id"],
+    });
+
+    const vaultAccount = await resolveVaultAccount(accountId, t);
+    const txn = await createCreditTransaction({
+      accountRow: vaultAccount,
+      amount,
+      description: `Completed issue sale for shop ${shopRecord?.name || issue.issued_shop_id} (${shopRecord?.shop_id || issue.issued_shop_id})`,
+      transaction: t,
+    });
+
+    const transactionMeta = txn
+      ? {
+          recorded: true,
+          transaction_id: txn.transaction_id,
+          account_id: txn.account_id,
+          amount: Number(txn.amount || 0),
+        }
+      : {
+          recorded: false,
+          reason: "No vault account available for automatic transaction",
+        };
+
+    const ownerSaleSync = await syncOwnerSaleForIssue({
+      issue,
+      nextStatus: 'sold',
+      paymentMethod,
+      transaction: t,
+    });
+
+    await addCustomerSalesLedger({
+      customerId: ownerSaleSync.ownerCustomerId,
+      amount: ownerSaleSync.amount,
+      paid: true,
+      transaction: t,
+    });
+
     await t.commit();
 
     return res.status(200).json({
       success: true,
       message: 'Sale marked as completed',
       data: issue,
+      transaction: transactionMeta,
     });
   } catch (error) {
     await t.rollback();

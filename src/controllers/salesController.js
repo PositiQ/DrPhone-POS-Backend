@@ -5,9 +5,78 @@ const {
   customer,
   customer_sales,
   Product_Stock,
+  Stock_Issues,
+  shop,
+  account,
+  drawerAcc,
+  trasactions,
 } = require("../models");
 const generateId = require("../helpers/idGen");
 const { Op, ValidationError, UniqueConstraintError } = require("sequelize");
+
+async function resolveVaultAccount(accountId, transaction) {
+  if (accountId) {
+    const selected = await account.findOne({
+      where: { acc_id: accountId },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (selected) return selected;
+  }
+
+  const latestDrawer = await account.findOne({
+    where: { type: "drawer" },
+    order: [["createdAt", "DESC"]],
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+  if (latestDrawer) return latestDrawer;
+
+  const anyAccount = await account.findOne({
+    order: [["createdAt", "DESC"]],
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
+  if (anyAccount) return anyAccount;
+
+  const defaultAccount = await account.create({
+    acc_id: await generateId("ACCOUNT", transaction),
+    type: "drawer",
+    available_balance: 0,
+  }, { transaction });
+
+  await drawerAcc.create({
+    drawer_acc_id: await generateId("DRAWER", transaction),
+    acc_id: defaultAccount.acc_id,
+    name: "System Drawer",
+    location: "Main Shop",
+    added_date: new Date(),
+  }, { transaction });
+
+  return defaultAccount;
+}
+
+async function createSaleCreditTransaction({ accountRow, amount, description, transaction }) {
+  const numericAmount = Number(amount || 0);
+  if (!accountRow || numericAmount <= 0) return null;
+
+  const beforeBalance = Number(accountRow.available_balance || 0);
+  const afterBalance = beforeBalance + numericAmount;
+
+  const transactionRow = await trasactions.create({
+    transaction_id: await generateId("TRANS", transaction),
+    amount: numericAmount,
+    account_id: accountRow.acc_id,
+    type: "credit",
+    description,
+    transaction_date: new Date(),
+    account_balance_before: beforeBalance,
+    account_balance_after: afterBalance,
+  }, { transaction });
+
+  await accountRow.update({ available_balance: afterBalance }, { transaction });
+  return transactionRow;
+}
 
 function buildSalesDateFilter(startDate, endDate) {
   const salesDateFilter = {};
@@ -27,6 +96,58 @@ function buildSalesDateFilter(startDate, endDate) {
   return salesDateFilter;
 }
 
+async function backfillUnsyncedIssueSales() {
+  const transaction = await sales.sequelize.transaction();
+
+  try {
+    const unsyncedIssues = await Stock_Issues.findAll({
+      where: { linked_sales_id: null },
+      include: [
+        {
+          model: shop,
+          as: "shop",
+          attributes: ["owner_customer_id"],
+        },
+      ],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    for (const issue of unsyncedIssues) {
+      const ownerCustomerId = issue.shop?.owner_customer_id;
+      const amount = Number(issue.issued_stock || 0) * Number(issue.selling_price || 0);
+
+      if (!ownerCustomerId || amount <= 0) {
+        continue;
+      }
+
+      const normalizedIssueStatus = String(issue.status || "pending_payment").toLowerCase();
+      const saleStatus = normalizedIssueStatus === "sold" ? "completed" : "pending";
+      const paymentMethod = saleStatus === "completed" ? "shop_settlement" : "credit";
+
+      const ownerSale = await sales.create(
+        {
+          sales_id: await generateId("SALE", transaction),
+          customer_id: ownerCustomerId,
+          total_discount: 0,
+          total_amount: Number(amount.toFixed(2)),
+          sales_date: issue.createdAt || new Date(),
+          payment_method: paymentMethod,
+          status: saleStatus,
+        },
+        { transaction }
+      );
+
+      await issue.update({ linked_sales_id: ownerSale.sales_id }, { transaction });
+    }
+
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error backfilling stock issue sales:", error);
+  }
+}
+
 // Create a new sale
 exports.createSale = async (req, res) => {
   try {
@@ -37,6 +158,7 @@ exports.createSale = async (req, res) => {
         total_discount,
         payment_method,
         status,
+        account_id,
       } = req.body;
 
       // Validate required fields
@@ -161,6 +283,16 @@ exports.createSale = async (req, res) => {
         );
       }
 
+      if (String(saleStatus).toLowerCase() === "completed") {
+        const vaultAccount = await resolveVaultAccount(account_id, transaction);
+        await createSaleCreditTransaction({
+          accountRow: vaultAccount,
+          amount: totalAmount,
+          description: `Sales invoice ${salesId} completed${customer_id ? ` for customer ${customer_id}` : ''}`,
+          transaction,
+        });
+      }
+
       return salesId;
     });
 
@@ -209,6 +341,8 @@ exports.createSale = async (req, res) => {
 // Get all sales
 exports.getAllSales = async (req, res) => {
   try {
+    await backfillUnsyncedIssueSales();
+
     const { page = 1, limit = 10, status, payment_method, start_date, end_date } = req.query;
     const offset = (page - 1) * limit;
 
@@ -345,6 +479,8 @@ exports.getSalesByCustomer = async (req, res) => {
 // Get sales summary (statistics)
 exports.getSalesSummary = async (req, res) => {
   try {
+    await backfillUnsyncedIssueSales();
+
     const { start_date, end_date } = req.query;
 
     const whereClause = {};

@@ -89,6 +89,11 @@ const ensureStockIssuesColumns = async () => {
       sql: "ALTER TABLE Stock_Issues ADD COLUMN status VARCHAR(255) NOT NULL DEFAULT 'pending_payment'",
       log: 'Added missing Stock_Issues.status column.',
     },
+    {
+      name: 'linked_sales_id',
+      sql: "ALTER TABLE Stock_Issues ADD COLUMN linked_sales_id VARCHAR(255)",
+      log: 'Added missing Stock_Issues.linked_sales_id column.',
+    },
   ];
 
   for (const column of requiredColumns) {

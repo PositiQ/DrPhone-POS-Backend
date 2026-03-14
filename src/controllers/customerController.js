@@ -169,10 +169,12 @@ exports.getAllCustomers = async (req, res) => {
       wholesale: customers.filter((c) => c.type === "wholesale").length,
     };
 
-    const totalOutstandingDues = customers.reduce((sum, customer) => {
-      const customerDues = customer.customer_sales.reduce((dueSum, sale) => {
-        if (sale.is_due_available && ["pending", "overdue"].includes(sale.payment_status)) {
-          return dueSum + parseFloat(sale.total_sales_amount || 0) - parseFloat(sale.paid_amount || 0);
+    const totalOutstandingDues = customers.reduce((sum, customerRecord) => {
+      const salesHistory = Array.isArray(customerRecord.sales) ? customerRecord.sales : [];
+      const customerDues = salesHistory.reduce((dueSum, sale) => {
+        const normalizedStatus = String(sale.status || "").toLowerCase();
+        if (["pending", "pending_payment"].includes(normalizedStatus)) {
+          return dueSum + parseFloat(sale.total_amount || 0);
         }
         return dueSum;
       }, 0);
@@ -477,22 +479,46 @@ exports.updateCustomerSale = async (req, res) => {
 exports.getCustomersWithDues = async (req, res) => {
   const t = await customer_sales.sequelize.transaction();
   try {
-    const customersWithDues = await customer_sales.findAll({
-      where: {
-        is_due_available: true,
-        payment_status: {
-          [Op.in]: ["pending", "overdue"],
-        },
-      },
+    const customersWithSales = await customer.findAll({
       include: [
         {
-          model: customer,
-          as: "customer",
+          model: salesModel,
+          as: "sales",
+          attributes: ["sales_id", "total_amount", "sales_date", "status", "payment_method"],
         },
       ],
-      order: [["last_sales_date", "DESC"]],
       transaction: t,
     });
+
+    const customersWithDues = customersWithSales
+      .map((customerRecord) => {
+        const salesHistory = Array.isArray(customerRecord.sales) ? customerRecord.sales : [];
+        const dues = salesHistory.filter((sale) =>
+          ["pending", "pending_payment"].includes(String(sale.status || "").toLowerCase())
+        );
+
+        const totalDue = dues.reduce(
+          (sum, sale) => sum + parseFloat(sale.total_amount || 0),
+          0,
+        );
+
+        if (totalDue <= 0) return null;
+
+        return {
+          customer_id: customerRecord.customer_id,
+          customer_name: customerRecord.name,
+          total_due: Number(totalDue.toFixed(2)),
+          dues_count: dues.length,
+          latest_due_date: dues
+            .map((sale) => sale.sales_date)
+            .filter(Boolean)
+            .sort()
+            .reverse()[0] || null,
+          dues,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(b.latest_due_date || '').localeCompare(String(a.latest_due_date || '')));
 
     await t.commit();
 

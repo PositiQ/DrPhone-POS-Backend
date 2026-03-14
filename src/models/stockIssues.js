@@ -43,6 +43,10 @@ const Stock_Issues = sequelize.define(
     status:{
         type: DataTypes.ENUM('pending_payment', 'sold'),
         allowNull: false,
+    },
+    linked_sales_id: {
+      type: DataTypes.STRING,
+      allowNull: true,
     }
   },
   {
