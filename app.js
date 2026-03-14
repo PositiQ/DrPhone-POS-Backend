@@ -39,6 +39,7 @@ app.get('/offline.html', (req, res) => {
 // API Routes
 app.use('/api/products', require('./src/routes/products'));
 app.use('/api/customers', require('./src/routes/customers'));
+app.use('/api/shops', require('./src/routes/shops'));
 app.use('/api/sales', require('./src/routes/sales'));
 app.use('/api/vault', require('./src/routes/vault'));
 
