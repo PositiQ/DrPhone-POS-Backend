@@ -21,8 +21,8 @@ Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' })
 Product_Stock.belongsTo(Product, { foreignKey: 'product_id' });
 
 // Stock issue associations
-Product_Stock.hasMany(Stock_Issues, { foreignKey: 'product_stock_id' });
-Stock_Issues.belongsTo(Product_Stock, { foreignKey: 'product_stock_id' });
+Product_Stock.hasMany(Stock_Issues, { foreignKey: 'product_id', sourceKey: 'product_id' });
+Stock_Issues.belongsTo(Product_Stock, { foreignKey: 'product_id', targetKey: 'product_id' });
 
 // Customer associations
 customer.hasMany(customer_sales, { foreignKey: 'customer_id', as: 'customer_sales', onDelete: 'CASCADE' });

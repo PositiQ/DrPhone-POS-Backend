@@ -1,4 +1,11 @@
-const { Product_Stock, Stock_Issues, shop, Product, sequelize } = require("../models");
+const {
+  Product_Stock,
+  Stock_Issues,
+  shop,
+  Product,
+  shopSales,
+  sequelize,
+} = require("../models");
 
 // Issue a stock item
 exports.issueStock = async (req, res) => {
@@ -7,9 +14,16 @@ exports.issueStock = async (req, res) => {
   try {
     const { product_id, issued_shop_id, issued_stock, selling_price, payment_status } = req.body;
 
-    const status = payment_status || "pending_payment";
+    const incomingStatus = String(payment_status || "pending_payment").toLowerCase();
+    const status = incomingStatus === "paid" ? "sold" : incomingStatus;
+
+    if (!["pending_payment", "sold"].includes(status)) {
+      await t.rollback();
+      return res.status(400).json({ message: "Invalid payment_status. Use pending_payment or sold." });
+    }
+
     const amount = issued_stock * selling_price;
-    const isPaid = status === "paid";
+    const isPaid = status === "sold";
 
     const [productStock, shopExists] = await Promise.all([
       Product_Stock.findOne({
@@ -46,7 +60,7 @@ exports.issueStock = async (req, res) => {
       status
     }, { transaction: t });
 
-    const [sales, created] = await shopSales.findOrCreate({
+    const [sales] = await shopSales.findOrCreate({
       where: { shop_id: issued_shop_id },
       defaults: {
         shop_id: issued_shop_id,
@@ -93,9 +107,6 @@ exports.issueStock = async (req, res) => {
   }
 };
 
-// Get all stock issues
-const { Product_Stock, Stock_Issues, shop, Product } = require("../models");
-
 exports.getAllStockIssues = async (req, res) => {
   try {
 
@@ -132,7 +143,7 @@ exports.getAllStockIssues = async (req, res) => {
         {
           model: shop,
           as: "shop",
-          attributes: ["shop_name"]
+          attributes: ["name"]
         }
       ]
     });
@@ -152,7 +163,7 @@ exports.getAllStockIssues = async (req, res) => {
       issue_status: issue.status || "not issued",
 
       storage_location: issue.Product_Stock?.storage_location || null,
-      issued_to: issue.shop?.shop_name || null,
+      issued_to: issue.shop?.name || null,
 
       issued_date: issue.createdAt || null
     }));
