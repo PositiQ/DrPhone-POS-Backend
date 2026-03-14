@@ -22,6 +22,8 @@ const supplierPurchase = require('./supplierPurchase');
 const supplierPurchaseItem = require('./supplierPurchaseItem');
 const supplierPayment = require('./supplierPayment');
 const supplierCheque = require('./supplierCheque');
+const returnRepairTicket = require('./returnRepairTicket');
+const repairPart = require('./repairPart');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -80,6 +82,10 @@ account.hasMany(supplierPurchase, { foreignKey: 'account_id', as: 'supplierPurch
 supplierPayment.belongsTo(account, { foreignKey: 'account_id', as: 'account' });
 account.hasMany(supplierPayment, { foreignKey: 'account_id', as: 'supplierPayments' });
 
+// Return and repair associations
+returnRepairTicket.hasMany(repairPart, { foreignKey: 'ticket_id', as: 'parts', onDelete: 'CASCADE' });
+repairPart.belongsTo(returnRepairTicket, { foreignKey: 'ticket_id', as: 'ticket' });
+
 
 
 
@@ -106,4 +112,6 @@ module.exports = {
     supplierPurchaseItem,
     supplierPayment,
     supplierCheque,
+    returnRepairTicket,
+    repairPart,
 };

@@ -435,6 +435,96 @@ const ensureSupplierPurchaseForeignKeyCompatibility = async () => {
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_supplier_purchase_supplier_purchase_id_unique ON supplier_purchase(supplier_purchase_id)"
   );
 };
+
+const ensureReturnRepairTicketColumns = async () => {
+  if (!isSqlite()) return;
+
+  const [tables] = await sequelize.query(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='return_repair_ticket'"
+  );
+
+  if (tables.length === 0) {
+    console.log("return_repair_ticket table doesn't exist yet.");
+    return;
+  }
+
+  const [tableInfo] = await sequelize.query("PRAGMA table_info('return_repair_ticket')");
+  const existingColumns = new Set(tableInfo.map((column) => column.name));
+
+  const requiredColumns = [
+    { name: "ticket_id", sql: "ALTER TABLE return_repair_ticket ADD COLUMN ticket_id VARCHAR(255)", log: "Added missing return_repair_ticket.ticket_id column." },
+    { name: "ticket_type", sql: "ALTER TABLE return_repair_ticket ADD COLUMN ticket_type VARCHAR(255) NOT NULL DEFAULT 'repair'", log: "Added missing return_repair_ticket.ticket_type column." },
+    { name: "status", sql: "ALTER TABLE return_repair_ticket ADD COLUMN status VARCHAR(255) NOT NULL DEFAULT 'pending_repair'", log: "Added missing return_repair_ticket.status column." },
+    { name: "customer_name", sql: "ALTER TABLE return_repair_ticket ADD COLUMN customer_name VARCHAR(255)", log: "Added missing return_repair_ticket.customer_name column." },
+    { name: "customer_phone", sql: "ALTER TABLE return_repair_ticket ADD COLUMN customer_phone VARCHAR(255)", log: "Added missing return_repair_ticket.customer_phone column." },
+    { name: "customer_email", sql: "ALTER TABLE return_repair_ticket ADD COLUMN customer_email VARCHAR(255)", log: "Added missing return_repair_ticket.customer_email column." },
+    { name: "device_name", sql: "ALTER TABLE return_repair_ticket ADD COLUMN device_name VARCHAR(255)", log: "Added missing return_repair_ticket.device_name column." },
+    { name: "imei", sql: "ALTER TABLE return_repair_ticket ADD COLUMN imei VARCHAR(255)", log: "Added missing return_repair_ticket.imei column." },
+    { name: "barcode", sql: "ALTER TABLE return_repair_ticket ADD COLUMN barcode VARCHAR(255)", log: "Added missing return_repair_ticket.barcode column." },
+    { name: "serial_number", sql: "ALTER TABLE return_repair_ticket ADD COLUMN serial_number VARCHAR(255)", log: "Added missing return_repair_ticket.serial_number column." },
+    { name: "issue_description", sql: "ALTER TABLE return_repair_ticket ADD COLUMN issue_description TEXT", log: "Added missing return_repair_ticket.issue_description column." },
+    { name: "return_reason", sql: "ALTER TABLE return_repair_ticket ADD COLUMN return_reason TEXT", log: "Added missing return_repair_ticket.return_reason column." },
+    { name: "can_return_to_stock", sql: "ALTER TABLE return_repair_ticket ADD COLUMN can_return_to_stock BOOLEAN NOT NULL DEFAULT 0", log: "Added missing return_repair_ticket.can_return_to_stock column." },
+    { name: "return_stock_qty", sql: "ALTER TABLE return_repair_ticket ADD COLUMN return_stock_qty INTEGER NOT NULL DEFAULT 0", log: "Added missing return_repair_ticket.return_stock_qty column." },
+    { name: "is_usable_product", sql: "ALTER TABLE return_repair_ticket ADD COLUMN is_usable_product BOOLEAN NOT NULL DEFAULT 1", log: "Added missing return_repair_ticket.is_usable_product column." },
+    { name: "send_back_to_supplier", sql: "ALTER TABLE return_repair_ticket ADD COLUMN send_back_to_supplier BOOLEAN NOT NULL DEFAULT 0", log: "Added missing return_repair_ticket.send_back_to_supplier column." },
+    { name: "repair_mode", sql: "ALTER TABLE return_repair_ticket ADD COLUMN repair_mode VARCHAR(255)", log: "Added missing return_repair_ticket.repair_mode column." },
+    { name: "repair_timeline", sql: "ALTER TABLE return_repair_ticket ADD COLUMN repair_timeline VARCHAR(255)", log: "Added missing return_repair_ticket.repair_timeline column." },
+    { name: "repair_cost", sql: "ALTER TABLE return_repair_ticket ADD COLUMN repair_cost DECIMAL(10, 2) NOT NULL DEFAULT 0", log: "Added missing return_repair_ticket.repair_cost column." },
+    { name: "external_shop_name", sql: "ALTER TABLE return_repair_ticket ADD COLUMN external_shop_name VARCHAR(255)", log: "Added missing return_repair_ticket.external_shop_name column." },
+    { name: "external_shop_location", sql: "ALTER TABLE return_repair_ticket ADD COLUMN external_shop_location VARCHAR(255)", log: "Added missing return_repair_ticket.external_shop_location column." },
+    { name: "action_note", sql: "ALTER TABLE return_repair_ticket ADD COLUMN action_note TEXT", log: "Added missing return_repair_ticket.action_note column." },
+    { name: "supplier_name", sql: "ALTER TABLE return_repair_ticket ADD COLUMN supplier_name VARCHAR(255)", log: "Added missing return_repair_ticket.supplier_name column." },
+    { name: "received_date", sql: "ALTER TABLE return_repair_ticket ADD COLUMN received_date DATETIME", log: "Added missing return_repair_ticket.received_date column." },
+    { name: "estimated_completion_date", sql: "ALTER TABLE return_repair_ticket ADD COLUMN estimated_completion_date DATETIME", log: "Added missing return_repair_ticket.estimated_completion_date column." }
+  ];
+
+  for (const column of requiredColumns) {
+    if (!existingColumns.has(column.name)) {
+      await sequelize.query(column.sql);
+      console.log(column.log);
+    }
+  }
+
+  await sequelize.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_return_repair_ticket_ticket_id_unique ON return_repair_ticket(ticket_id)"
+  );
+};
+
+const ensureRepairPartColumns = async () => {
+  if (!isSqlite()) return;
+
+  const [tables] = await sequelize.query(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='repair_part'"
+  );
+
+  if (tables.length === 0) {
+    console.log("repair_part table doesn't exist yet.");
+    return;
+  }
+
+  const [tableInfo] = await sequelize.query("PRAGMA table_info('repair_part')");
+  const existingColumns = new Set(tableInfo.map((column) => column.name));
+
+  const requiredColumns = [
+    { name: "repair_part_id", sql: "ALTER TABLE repair_part ADD COLUMN repair_part_id VARCHAR(255)", log: "Added missing repair_part.repair_part_id column." },
+    { name: "ticket_id", sql: "ALTER TABLE repair_part ADD COLUMN ticket_id VARCHAR(255)", log: "Added missing repair_part.ticket_id column." },
+    { name: "part_name", sql: "ALTER TABLE repair_part ADD COLUMN part_name VARCHAR(255)", log: "Added missing repair_part.part_name column." },
+    { name: "quantity", sql: "ALTER TABLE repair_part ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1", log: "Added missing repair_part.quantity column." },
+    { name: "part_cost", sql: "ALTER TABLE repair_part ADD COLUMN part_cost DECIMAL(10, 2) NOT NULL DEFAULT 0", log: "Added missing repair_part.part_cost column." }
+  ];
+
+  for (const column of requiredColumns) {
+    if (!existingColumns.has(column.name)) {
+      await sequelize.query(column.sql);
+      console.log(column.log);
+    }
+  }
+
+  await sequelize.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_part_repair_part_id_unique ON repair_part(repair_part_id)"
+  );
+};
 // Database connection and server startup
 const startServer = async () => {
   try {
@@ -455,6 +545,8 @@ const startServer = async () => {
     await ensureSupplierChequeColumns();
     await ensureSupplierPurchaseItemColumns();
     await ensureSupplierPurchaseForeignKeyCompatibility();
+    await ensureReturnRepairTicketColumns();
+    await ensureRepairPartColumns();
 
     // Start server
     app.listen(PORT, () => {
