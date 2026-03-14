@@ -113,8 +113,14 @@ exports.getAllStockIssues = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 100;
     const offset = (page - 1) * limit;
+    const { shop_id, status } = req.query;
+
+    const whereClause = {};
+    if (shop_id) whereClause.issued_shop_id = shop_id;
+    if (status) whereClause.status = status;
 
     const { count, rows } = await Stock_Issues.findAndCountAll({
+      where: whereClause,
       limit,
       offset,
       order: [["createdAt", "DESC"]],
@@ -150,6 +156,13 @@ exports.getAllStockIssues = async (req, res) => {
 
     const formattedData = rows.map(issue => ({
       id: issue.id,
+      issued_shop_id: issue.issued_shop_id,
+      issued_stock: issue.issued_stock,
+      selling_price: issue.selling_price,
+      issue_amount: Number(issue.issued_stock || 0) * Number(issue.selling_price || 0),
+      outstanding_amount: String(issue.status || '').toLowerCase() === 'sold'
+        ? 0
+        : Number(issue.issued_stock || 0) * Number(issue.selling_price || 0),
 
       product_name: issue.Product_Stock?.Product?.productName || null,
       price: issue.Product_Stock?.selling_price || null,
@@ -187,6 +200,196 @@ exports.getAllStockIssues = async (req, res) => {
       success: false,
       message: "Error fetching stock issues",
       error: error.message
+    });
+  }
+};
+
+exports.getShopStockIssues = async (req, res) => {
+  try {
+    const { shopId } = req.params;
+    const { status } = req.query;
+
+    const whereClause = { issued_shop_id: shopId };
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const issues = await Stock_Issues.findAll({
+      where: whereClause,
+      order: [["createdAt", "DESC"]],
+      include: [
+        {
+          model: Product_Stock,
+          attributes: ["status"],
+          include: [
+            {
+              model: Product,
+              attributes: ["productName", "capacity", "color", "IMEI"],
+            },
+          ],
+        },
+        {
+          model: shop,
+          as: "shop",
+          attributes: ["shop_id", "name"],
+        },
+      ],
+    });
+
+    const data = issues.map((issue) => ({
+      id: issue.id,
+      issued_shop_id: issue.issued_shop_id,
+      issued_stock: issue.issued_stock,
+      selling_price: Number(issue.selling_price || 0),
+      issue_amount: Number(issue.issued_stock || 0) * Number(issue.selling_price || 0),
+      status: issue.status,
+      product_name: issue.Product_Stock?.Product?.productName || null,
+      capacity: issue.Product_Stock?.Product?.capacity || null,
+      color: issue.Product_Stock?.Product?.color || null,
+      IMEI: issue.Product_Stock?.Product?.IMEI || null,
+      issued_to: issue.shop?.name || issue.issued_to || null,
+      issued_date: issue.createdAt || null,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data,
+      stats: {
+        count: data.length,
+        outstanding_amount: data
+          .filter((item) => String(item.status).toLowerCase() !== 'sold')
+          .reduce((sum, item) => sum + Number(item.issue_amount || 0), 0),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error fetching shop stock issues",
+      error: error.message,
+    });
+  }
+};
+
+exports.settleShopPayments = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { shopId } = req.params;
+    const settlementType = String(req.body.type || 'full').toLowerCase();
+
+    if (!['full', 'half'].includes(settlementType)) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid settlement type. Use full or half.',
+      });
+    }
+
+    const pendingIssues = await Stock_Issues.findAll({
+      where: {
+        issued_shop_id: shopId,
+        status: 'pending_payment',
+      },
+      order: [["createdAt", "ASC"]],
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!pendingIssues.length) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'No pending payments found for this shop.',
+      });
+    }
+
+    const totalOutstanding = pendingIssues.reduce(
+      (sum, issue) => sum + (Number(issue.issued_stock || 0) * Number(issue.selling_price || 0)),
+      0
+    );
+
+    const targetAmount = settlementType === 'full' ? totalOutstanding : totalOutstanding / 2;
+
+    let settledAmount = 0;
+    let settledDevices = 0;
+    const issueIdsToSettle = [];
+
+    for (const issue of pendingIssues) {
+      const issueAmount = Number(issue.issued_stock || 0) * Number(issue.selling_price || 0);
+
+      if (settlementType === 'full') {
+        issueIdsToSettle.push(issue.id);
+        settledAmount += issueAmount;
+        settledDevices += Number(issue.issued_stock || 0);
+        continue;
+      }
+
+      if (settledAmount + issueAmount <= targetAmount || issueIdsToSettle.length === 0) {
+        issueIdsToSettle.push(issue.id);
+        settledAmount += issueAmount;
+        settledDevices += Number(issue.issued_stock || 0);
+      } else {
+        break;
+      }
+    }
+
+    await Stock_Issues.update(
+      { status: 'sold' },
+      {
+        where: { id: issueIdsToSettle },
+        transaction: t,
+      }
+    );
+
+    const [sales] = await shopSales.findOrCreate({
+      where: { shop_id: shopId },
+      defaults: {
+        shop_id: shopId,
+        total_sales: 0,
+        total_paid: 0,
+        total_outstanding: 0,
+        total_devices: 0,
+        active_devices: 0,
+        sold_devices: 0,
+      },
+      transaction: t,
+    });
+
+    await sales.increment({
+      active_devices: -settledDevices,
+      sold_devices: settledDevices,
+      total_paid: settledAmount,
+      total_outstanding: -settledAmount,
+    }, { transaction: t });
+
+    await sales.reload({ transaction: t });
+    await sales.update({
+      active_devices: Math.max(Number(sales.active_devices || 0), 0),
+      total_outstanding: Math.max(Number(sales.total_outstanding || 0), 0),
+    }, { transaction: t });
+
+    await t.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: settlementType === 'full'
+        ? 'Full settlement completed successfully'
+        : 'Half settlement completed successfully',
+      data: {
+        type: settlementType,
+        issues_settled: issueIdsToSettle.length,
+        devices_settled: settledDevices,
+        amount_settled: settledAmount,
+        previous_outstanding: totalOutstanding,
+        remaining_outstanding: Math.max(totalOutstanding - settledAmount, 0),
+      },
+    });
+  } catch (error) {
+    await t.rollback();
+    return res.status(500).json({
+      success: false,
+      message: 'Error settling shop payments',
+      error: error.message,
     });
   }
 };
