@@ -24,6 +24,7 @@ const supplierPayment = require('./supplierPayment');
 const supplierCheque = require('./supplierCheque');
 const returnRepairTicket = require('./returnRepairTicket');
 const repairPart = require('./repairPart');
+const appSetting = require('./appSetting');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -114,4 +115,5 @@ module.exports = {
     supplierCheque,
     returnRepairTicket,
     repairPart,
+    appSetting,
 };

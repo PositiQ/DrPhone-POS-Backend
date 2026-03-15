@@ -8,8 +8,8 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '15mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '15mb' }));
 
 // Serve static files from parent directory (for PWA files)
 app.use(express.static(path.join(__dirname, '..')));
@@ -46,6 +46,8 @@ app.use('/api/vault', require('./src/routes/vault'));
 app.use('/api/expenses', require('./src/routes/expenses'));
 app.use('/api/suppliers', require('./src/routes/suppliers'));
 app.use('/api/returns-repairs', require('./src/routes/returnsRepairs'));
+app.use('/api/reset', require('./src/routes/reset'));
+app.use('/api/settings', require('./src/routes/settings'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
