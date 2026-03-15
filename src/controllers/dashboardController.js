@@ -114,8 +114,13 @@ exports.getOverview = async (req, res) => {
       status: String(row.status || 'pending').toLowerCase(),
     }));
 
-    const lowStockMsg = `${lowStock} products are running low on stock.`;
-    const outStockMsg = `${outOfStock} items are out of stock!`;
+    const alertParts = [];
+    if (lowStock > 0) {
+      alertParts.push(`${lowStock} products are running low on stock.`);
+    }
+    if (outOfStock > 0) {
+      alertParts.push(`${outOfStock} items are out of stock!`);
+    }
 
     res.json({
       success: true,
@@ -123,7 +128,7 @@ exports.getOverview = async (req, res) => {
         alerts: {
           lowStock,
           outOfStock,
-          text: `${lowStockMsg} ${outStockMsg}`,
+          text: alertParts.join(' '),
         },
         stats: {
           todaysSales,
