@@ -2,9 +2,33 @@ const express = require('express');
 const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const rateLimit = require('express-rate-limit');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
+
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many authentication attempts. Please try again in 15 minutes.',
+  },
+});
+
+const apiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.originalUrl.startsWith('/api/auth'),
+  message: {
+    success: false,
+    message: 'Too many requests. Please try again in a few minutes.',
+  },
+});
 
 // Middleware
 app.use(cors());
@@ -35,6 +59,9 @@ app.get('/offline.html', (req, res) => {
   res.type('text/html');
   res.sendFile(path.join(__dirname, '..', 'offline.html'));
 });
+
+app.use('/api/auth', authRateLimiter);
+app.use('/api', apiRateLimiter);
 
 // API Routes
 app.use('/api/products', require('./src/routes/products'));
