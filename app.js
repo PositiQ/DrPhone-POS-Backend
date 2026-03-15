@@ -48,6 +48,7 @@ app.use('/api/suppliers', require('./src/routes/suppliers'));
 app.use('/api/returns-repairs', require('./src/routes/returnsRepairs'));
 app.use('/api/reset', require('./src/routes/reset'));
 app.use('/api/settings', require('./src/routes/settings'));
+app.use('/api/dashboard', require('./src/routes/dashboard'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
