@@ -25,6 +25,8 @@ const supplierCheque = require('./supplierCheque');
 const returnRepairTicket = require('./returnRepairTicket');
 const repairPart = require('./repairPart');
 const appSetting = require('./appSetting');
+const userRole = require('./userRole');
+const user = require('./user');
 
 // Define associations
 Product.hasOne(Product_Stock, { foreignKey: 'product_id', onDelete: 'CASCADE' });
@@ -87,8 +89,9 @@ account.hasMany(supplierPayment, { foreignKey: 'account_id', as: 'supplierPaymen
 returnRepairTicket.hasMany(repairPart, { foreignKey: 'ticket_id', as: 'parts', onDelete: 'CASCADE' });
 repairPart.belongsTo(returnRepairTicket, { foreignKey: 'ticket_id', as: 'ticket' });
 
-
-
+// User and role associations
+userRole.hasMany(user, { foreignKey: 'role_id', as: 'users' });
+user.belongsTo(userRole, { foreignKey: 'role_id', as: 'role' });
 
 module.exports = {
   sequelize,
@@ -116,4 +119,6 @@ module.exports = {
     returnRepairTicket,
     repairPart,
     appSetting,
+    userRole,
+    user,
 };

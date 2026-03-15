@@ -50,6 +50,8 @@ app.use('/api/reset', require('./src/routes/reset'));
 app.use('/api/settings', require('./src/routes/settings'));
 app.use('/api/dashboard', require('./src/routes/dashboard'));
 app.use('/api/notifications', require('./src/routes/notifications'));
+app.use('/api/auth', require('./src/routes/auth'));
+app.use('/api/users', require('./src/routes/users'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

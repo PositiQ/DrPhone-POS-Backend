@@ -1,6 +1,7 @@
 const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs');
 const app = require('./app');
-const { sequelize } = require('./src/models');
+const { sequelize, userRole, user } = require('./src/models');
 
 // Load environment variables
 dotenv.config();
@@ -525,6 +526,111 @@ const ensureRepairPartColumns = async () => {
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_part_repair_part_id_unique ON repair_part(repair_part_id)"
   );
 };
+
+const ensureDefaultUsersAndRoles = async () => {
+  const defaultRoles = [
+    {
+      role_id: 'ROLE-ADMIN',
+      name: 'Admin',
+      description: 'Full system access.',
+      permissions: ['*'],
+      is_system: true,
+    },
+    {
+      role_id: 'ROLE-MANAGER',
+      name: 'Manager',
+      description: 'Operational access across core modules.',
+      permissions: [
+        'dashboard.view',
+        'sales.view',
+        'sales.manage',
+        'inventory.view',
+        'inventory.manage',
+        'products.view',
+        'products.manage',
+        'customers.view',
+        'customers.manage',
+        'invoices.view',
+        'vault.view',
+        'expenses.view',
+        'expenses.manage',
+        'suppliers.view',
+        'suppliers.manage',
+        'shops.view',
+        'returns_repairs.view',
+        'returns_repairs.manage',
+        'profile.manage',
+      ],
+      is_system: true,
+    },
+    {
+      role_id: 'ROLE-CASHIER',
+      name: 'Cashier',
+      description: 'Sales and customer handling access.',
+      permissions: [
+        'dashboard.view',
+        'sales.view',
+        'sales.manage',
+        'products.view',
+        'customers.view',
+        'customers.manage',
+        'invoices.view',
+        'profile.manage',
+      ],
+      is_system: true,
+    },
+    {
+      role_id: 'ROLE-STAFF',
+      name: 'Staff',
+      description: 'Basic day-to-day operational access.',
+      permissions: [
+        'dashboard.view',
+        'inventory.view',
+        'products.view',
+        'returns_repairs.view',
+        'profile.manage',
+      ],
+      is_system: true,
+    },
+  ];
+
+  for (const roleData of defaultRoles) {
+    const existingRole = await userRole.findOne({ where: { role_id: roleData.role_id } });
+    if (!existingRole) {
+      await userRole.create({
+        ...roleData,
+        permissions: JSON.stringify(roleData.permissions),
+      });
+      console.log(`Created default role ${roleData.name}.`);
+      continue;
+    }
+
+    if (existingRole.is_system) {
+      existingRole.name = roleData.name;
+      existingRole.description = roleData.description;
+      existingRole.permissions = JSON.stringify(roleData.permissions);
+      await existingRole.save();
+    }
+  }
+
+  const adminRole = await userRole.findOne({ where: { role_id: 'ROLE-ADMIN' } });
+  const adminEmail = 'admin@positiq.lk';
+  const existingAdmin = await user.findOne({ where: { email: adminEmail } });
+
+  if (!existingAdmin) {
+    await user.create({
+      user_id: 'USER-SUPERADMIN',
+      name: 'PositiQ Admin',
+      email: adminEmail,
+      phone: 'N/A',
+      password_hash: await bcrypt.hash('admin@123', 10),
+      role_id: adminRole.role_id,
+      status: 'active',
+    });
+    console.log('Created default superadmin user admin@positiq.lk.');
+  }
+};
+
 // Database connection and server startup
 const startServer = async () => {
   try {
@@ -547,6 +653,7 @@ const startServer = async () => {
     await ensureSupplierPurchaseForeignKeyCompatibility();
     await ensureReturnRepairTicketColumns();
     await ensureRepairPartColumns();
+    await ensureDefaultUsersAndRoles();
 
     // Start server
     app.listen(PORT, () => {
