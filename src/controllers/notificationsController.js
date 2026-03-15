@@ -31,6 +31,12 @@ function createNotif({ id, type, icon, iconBg, iconColor, message, timestamp, un
   };
 }
 
+function stamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '0';
+  return String(date.getTime());
+}
+
 exports.getNotifications = async (req, res) => {
   try {
     const now = new Date();
@@ -111,7 +117,7 @@ exports.getNotifications = async (req, res) => {
 
       if (qty <= 0 || status === 'sold' || status === 'discontinued' || status === 'inactive') {
         notifications.push(createNotif({
-          id: `stock-out-${product.id}`,
+          id: `stock-out-${product.id}-${status}-${qty}-${stamp(stock.updatedAt || stock.createdAt)}`,
           type: 'out_of_stock',
           icon: 'fa-exclamation-triangle',
           iconBg: '#fce4ec',
@@ -122,7 +128,7 @@ exports.getNotifications = async (req, res) => {
         }));
       } else if (min > 0 && qty <= min) {
         notifications.push(createNotif({
-          id: `stock-low-${product.id}`,
+          id: `stock-low-${product.id}-${qty}-${min}-${stamp(stock.updatedAt || stock.createdAt)}`,
           type: 'low_stock',
           icon: 'fa-box',
           iconBg: '#e8eaf6',
@@ -137,7 +143,7 @@ exports.getNotifications = async (req, res) => {
     // New sales notifications
     recentSales.forEach((sale) => {
       notifications.push(createNotif({
-        id: `sale-${sale.sales_id}`,
+        id: `sale-${sale.sales_id}-${stamp(sale.sales_date || sale.createdAt)}`,
         type: 'new_sale',
         icon: 'fa-shopping-bag',
         iconBg: '#e8f5e9',
@@ -153,7 +159,7 @@ exports.getNotifications = async (req, res) => {
       const supplierName = purchase.supplier?.name || purchase.supplier_id || 'Supplier';
       const due = Number(purchase.balance_due || 0).toLocaleString();
       notifications.push(createNotif({
-        id: `supplier-purchase-overdue-${purchase.supplier_purchase_id}`,
+        id: `supplier-purchase-overdue-${purchase.supplier_purchase_id}-${Number(purchase.balance_due || 0)}-${String(purchase.status || '')}-${stamp(purchase.updatedAt || purchase.purchase_date || purchase.createdAt)}`,
         type: 'supplier_overdue',
         icon: 'fa-file-invoice-dollar',
         iconBg: '#fff3e0',
@@ -169,7 +175,7 @@ exports.getNotifications = async (req, res) => {
       const supplierName = cheque.supplier?.name || cheque.supplier_id || 'Supplier';
       const amount = Number(cheque.amount || 0).toLocaleString();
       notifications.push(createNotif({
-        id: `supplier-cheque-overdue-${cheque.supplier_cheque_id}`,
+        id: `supplier-cheque-overdue-${cheque.supplier_cheque_id}-${Number(cheque.amount || 0)}-${String(cheque.status || '')}-${stamp(cheque.updatedAt || cheque.due_date || cheque.createdAt)}`,
         type: 'supplier_overdue',
         icon: 'fa-money-check-alt',
         iconBg: '#fff3e0',
@@ -184,7 +190,7 @@ exports.getNotifications = async (req, res) => {
     overdueRepairs.forEach((ticket) => {
       const dueDate = ticket.estimated_completion_date ? new Date(ticket.estimated_completion_date).toLocaleDateString() : 'N/A';
       notifications.push(createNotif({
-        id: `repair-overdue-${ticket.ticket_id}`,
+        id: `repair-overdue-${ticket.ticket_id}-${String(ticket.status || '')}-${stamp(ticket.estimated_completion_date || ticket.updatedAt || ticket.createdAt)}`,
         type: 'repair_overdue',
         icon: 'fa-tools',
         iconBg: '#e3f2fd',
